@@ -4,22 +4,25 @@
 """
 
 import data_loader
+import os
 
 ###### GLOBALS ######
 
-MAIN_PARAMETER = 'data/main_parameter.csv'
-DISTRIBUTION_BUILDINGS = 'data/distribution_buildings.csv'
-POPULATION = 'data/population.csv'
+PATH_MAIN_PARAMETER = os.path.join('data','main_parameter.csv')
+PATH_DISTRIBUTION_BUILDINGS = os.path.join('data','distribution_buildings.csv')
+PATH_POPULATION = os.path.join('data','population.csv')
+PATH_TABULA = os.path.join('data','TABULA-Analyses_DE-Typology_ResultData.xlsx')
 
+def load_data(): 
+    dl = data_loader.DataLoader()  
+    #main_parameter_df = dl.load_csv(PATH_MAIN_PARAMETER)
+    #distribution_buildings_df = dl.load_csv(PATH_DISTRIBUTION_BUILDINGS)
+    #population_df = dl.load_csv(PATH_POPULATION)
+    dl.load_tabula(PATH_TABULA) 
 
 def main():
   # load all relevant input data from the data loader
-  dl = data_loader.DataLoader()
-  main_parameter_df = dl.load_csv(MAIN_PARAMETER)
-  distribution_buildings_df = dl.load_csv(DISTRIBUTION_BUILDINGS)
-  population_df = dl.load_csv(POPULATION)
-  
-  print(distribution_buildings_df)
+  load_data()
 
 
 if __name__ == '__main__':
