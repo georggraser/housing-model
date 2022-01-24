@@ -17,3 +17,7 @@ class DataLoader():
 		return df
 		
 
+	def load_tabula(self, path_to_tabula):	
+		df = pd.read_excel(path_to_tabula, sheet_name="DE Tables & Charts")
+		print(df)
+
