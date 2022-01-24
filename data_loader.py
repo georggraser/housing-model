@@ -22,14 +22,22 @@ class DataLoader():
 		# and being called from there
 		
 		# parameters for calling the tabula
-		columns = "BB, BC, BH, BN, BO, BL, BM"
-		header_names = {"building_type" : "BB",
+		columns_used = {"building_type" : "BB",
 										"building_code" : "BC", 
 										"energy_reference_area" : "BH",
 										"heating_provided" : "BN",
 										"warm_water_provided" : "BO",
 										"heating_need" : "BL",
 										"warm_water_need" : "BM"}
+		columns = ""
+		headers = []
+		for key, value in columns_used.items():
+			headers.append(key)
+			if columns is "":
+				columns = value
+			else: 
+				columns += ", " + value
+				
 		rows_start = 147
 		rows_end = 278
 
@@ -37,7 +45,7 @@ class DataLoader():
 		df = pd.read_excel(path_to_tabula, sheet_name="DE Tables & Charts", 
                         usecols=columns, skiprows=rows_start-1, 
                         nrows=rows_end-rows_start+1, header=None,
-												names=header_names.keys())
+												names=headers)
 
 		print(df)
 		return df

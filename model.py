@@ -3,6 +3,8 @@
 @author: guuug
 """
 
+###### IMPORTS ######
+
 import data_loader
 import os
 
@@ -12,6 +14,8 @@ PATH_MAIN_PARAMETER = os.path.join('data','main_parameter.csv')
 PATH_DISTRIBUTION_BUILDINGS = os.path.join('data','distribution_buildings.csv')
 PATH_POPULATION = os.path.join('data','population.csv')
 PATH_TABULA = os.path.join('data','TABULA-Analyses_DE-Typology_ResultData.xlsx')
+
+###### METHODS ######
 
 def load_data(): 
     dl = data_loader.DataLoader()  
