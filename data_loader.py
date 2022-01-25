@@ -25,10 +25,10 @@ class DataLoader():
 		columns_used = {"building_type" : "BB",
 										"building_code" : "BC", 
 										"energy_reference_area" : "BH",
-										"heating_provided" : "BN",
-										"warm_water_provided" : "BO",
-										"heating_need" : "BL",
-										"warm_water_need" : "BM"}
+										"heat_provided" : "BN",
+										"hot_water_provided" : "BO",
+										"space_heat_demand" : "BL",
+										"hot_water_demand" : "BM"}
 		columns = ""
 		headers = []
 		for key, value in columns_used.items():
