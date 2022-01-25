@@ -25,7 +25,18 @@ class DataLoader_test(unittest.TestCase):
         self.assertTrue(os.path.exists(path_tabula))
 
         dl = data_loader.DataLoader()
-        dl.load_tabula(path_tabula)       
+        df = dl.load_tabula(path_tabula)    
+        
+        # test if file is empty
+        self.assertIsNotNone(df)
+
+        # test if all building types are in the dataframe
+        building_types = ['EFH', 'RH', 'MFH', 'GMH', 'Sub-Typen',]
+        check_column_name = 'building_type'
+        check_column_list = df[check_column_name].to_list()
+        for b_type in building_types:
+            self.assertTrue(b_type in check_column_list)
+        
   
 if __name__ == '__main__':
     unittest.main()
