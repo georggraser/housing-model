@@ -3,6 +3,7 @@
 @author: guuug
 """
 
+from cmath import nan
 import pandas as pd
 
 
@@ -10,6 +11,14 @@ class DataLoader():
     """
     loads all inputs and returns them as dataframe
     """
+
+    def load_share_buildings(self, path_share_buildings):
+        df = pd.read_excel(path_share_buildings)
+        total_living_space = df['living_space_mio.m2'].sum()
+        relative_living_space = [x / total_living_space for x in df['living_space_mio.m2'] if x is not nan]
+        df.loc[:, 'percent_living_space'] = relative_living_space
+        #print(df.to_markdown())
+        return df
 
     def load_demographic_developement(self, path_demographic_dev):
         # TODO: check if the parameters should be changeable in a spreadsheet somewhere
@@ -36,7 +45,8 @@ class DataLoader():
 
         # parameters for calling the tabula
         sheet_name = 'DE Tables & Charts'
-        columns_used = {'building_type' : 'BB',
+        columns_used = {'identifier' : 'F',
+                        'building_type' : 'BB',
                         'building_code' : 'BC', 
                         'energy_reference_area' : 'BH',
                         'heat_provided' : 'BN',

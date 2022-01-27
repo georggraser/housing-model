@@ -21,16 +21,16 @@ class DataLoader_test(unittest.TestCase):
 
     # assure that the tabula table is loaded and still in it's path
     def test_load_tabula(self): 
-        path_tabula = os.path.join(FOLDER_PATH, 
+        filepath = os.path.join(FOLDER_PATH, 
                         '..', 
                         'data', 
                         'TABULA-Analyses_DE-Typology_ResultData.xlsx')
 
         # assert that the file that is being loaded exists
-        self.assertTrue(os.path.exists(path_tabula))
+        self.assertTrue(os.path.exists(filepath))
 
         dl = data_loader.DataLoader()
-        df = dl.load_tabula(path_tabula)    
+        df = dl.load_tabula(filepath)    
         
         # test if file is empty
         self.assertIsNotNone(df)
@@ -40,18 +40,18 @@ class DataLoader_test(unittest.TestCase):
         check_column_list = df['building_type'].to_list()
         self.check_in(building_types, check_column_list)
         
-    # assure that the tabula table is loaded and still in it's path
+    # assure that the demographic developement table is loaded and still in it's path
     def test_load_demographic_developement(self): 
-        path_demographic_dev = os.path.join(FOLDER_PATH, 
+        filepath = os.path.join(FOLDER_PATH, 
                         '..', 
                         'data', 
                         '12421-0001.xlsx')
 
         # assert that the file that is being loaded exists
-        self.assertTrue(os.path.exists(path_demographic_dev))
+        self.assertTrue(os.path.exists(filepath))
 
         dl = data_loader.DataLoader()
-        df = dl.load_demographic_developement(path_demographic_dev)    
+        df = dl.load_demographic_developement(filepath)    
         
         # test if file is empty
         self.assertIsNotNone(df)
@@ -67,6 +67,21 @@ class DataLoader_test(unittest.TestCase):
         self.check_in(bev_variants, variants)
         self.check_in(bev_models, variants)
         self.check_in(check_days, headers)
+    
+    # assure that the share_buildings table is loaded and still in it's path
+    def test_load_share_buildings(self):
+        filepath = os.path.join(FOLDER_PATH, 
+                                '..', 
+                                'data', 
+                                'share_buildings_2019.xlsx')
+
+        # assert that the file that is being loaded exists
+        self.assertTrue(os.path.exists(filepath))
+        dl = data_loader.DataLoader()
+        df = dl.load_share_buildings(filepath)
+        
+        # test if file is empty
+        self.assertIsNotNone(df)
         
 if __name__ == '__main__':
     unittest.main()
