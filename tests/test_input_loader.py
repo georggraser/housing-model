@@ -5,19 +5,14 @@
 
 import unittest
 import os
-import sys
-
 # this adds the root directory to our path to be able to load data from root
-FOLDER_PATH = os.path.dirname(__file__)
-sys.path.insert(1, os.path.join(FOLDER_PATH, '..'))
 import input_loader
 
 # GLOBALS
 
 IL = input_loader.InputLoader()
 
-SOE = os.path.join(FOLDER_PATH,
-                   '..',
+SOE = os.path.join('..',
                    'input',
                    'parameter_soe.xlsx')
 
