@@ -6,6 +6,7 @@
 # IMPORTS
 
 import data_loader
+import input_loader
 import os
 
 # GLOBALS
@@ -36,21 +37,30 @@ TABULA = os.path.join(
 SHARE_BUILDINGS_2019 = os.path.join(
     'data', 'share_buildings_2019.xlsx')
 
+# Input data - different scenarios
+SOE = os.path.join('input', 'parameter_soe.xlsx')
+
 
 # METHODS
 
+
 def load_data():
-
     dl = data_loader.DataLoader()
-
-    # df_tabula = dl.load_tabula(TABULA)
-    # df_dem_dev = dl.load_demographic_developement(DEMOGRAPHIC_DEVELOPEMENT)
+    df_tabula = dl.load_tabula(TABULA)
+    df_dem_dev = dl.load_demographic_developement(DEMOGRAPHIC_DEVELOPEMENT)
     df_share_buildings = dl.load_share_buildings(SHARE_BUILDINGS_2019)
+    return df_tabula, df_dem_dev, df_share_buildings
+
+
+def load_input():
+    il = input_loader.InputLoader()
+    _ = il.load_params_soe(SOE)
 
 
 def main():
     # load all relevant input data from the data loader
-    load_data()
+    # load_data()
+    load_input()
 
 
 if __name__ == '__main__':

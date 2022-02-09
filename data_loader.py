@@ -9,7 +9,7 @@ import pandas as pd
 
 class DataLoader():
     """
-    loads all inputs and returns them as dataframe
+    loads data from tables and returns it as dataframe
     """
 
     def load_share_buildings(self, path_share_buildings):
@@ -18,6 +18,8 @@ class DataLoader():
         relative_living_space = [x / total_living_space
                                  for x in df['living_space_mio.m2']
                                  if x is not nan]
+        # add a column called 'percent_living_space' and insert
+        # calculated values
         df.loc[:, 'percent_living_space'] = relative_living_space
         # print(df.to_markdown())
         return df
