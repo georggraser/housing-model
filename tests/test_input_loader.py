@@ -14,7 +14,7 @@ import input_loader
 
 # GLOBALS
 
-IL = input_loader.INPUTLoader()
+IL = input_loader.InputLoader()
 
 SOE = os.path.join(FOLDER_PATH,
                    '..',
@@ -34,7 +34,7 @@ class InputLoader_test(unittest.TestCase):
     def test_load_params_soe(self):
         # assert that the file that is being loaded exists
         self.assertTrue(os.path.exists(SOE))
-        df = IL.load_tabula(SOE)
+        df = IL.load_params_soe(SOE)
 
         # test if file is empty
         self.assertIsNotNone(df)
@@ -54,16 +54,17 @@ class InputLoader_test(unittest.TestCase):
                       'share_demolition_sfh',
                       'share_demolition_ah',
                       'share_demolition_sfh']
-        check_column_list = df['parameter'].to_list()
+        keys = ['parameter', 2020, 2030, 2040, 2050]
+        self.check_in(keys, df.keys())
+        check_column_list = df[keys[0]].to_list()
         self.check_in(parameters, check_column_list)
 
         # ensure that all entries in years differ from zero
-        years = ['2020', '2030', '2040', '2050']
-        for year in years:
+        for year in keys[1:]:
             check_column_list = df[year].to_list()
             for elem in check_column_list:
                 self.assertIsNotNone(elem)
-                self.assertNotEqual(0)
+                self.assertNotEqual(elem, 0)
 
 
 if __name__ == '__main__':
