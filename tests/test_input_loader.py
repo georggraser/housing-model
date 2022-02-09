@@ -6,7 +6,7 @@
 import unittest
 import os
 # this adds the root directory to our path to be able to load data from root
-import input_loader
+from .. import input_loader
 
 # GLOBALS
 
