@@ -38,7 +38,7 @@ SHARE_BUILDINGS_2019 = os.path.join(
     'data', 'share_buildings_2019.xlsx')
 
 # Input data - different scenarios
-SOE = os.path.join('input', 'parameter_soe.xlsx')
+SOE = os.path.join('input', 'parameter_scenarios.xlsx')
 
 
 # METHODS
