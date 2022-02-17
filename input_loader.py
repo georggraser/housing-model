@@ -15,10 +15,18 @@ class InputLoader():
     ab = ambitious
     """
 
-    def get_linear_dist(a, b, years=10):
-        yearly_factor = (b-a)/years
-        linear = [yearly_factor for i in range(years)]
-        return linear
+    # TODO: Ask Luisa whether this way or another
+    def get_linear_dist(self, a, b, c, d, years):
+        def get_linear(x, y):
+            return [(y-x)/years for i in range(years)]
+        linear1 = get_linear(a, b)
+        linear2 = get_linear(b, c)
+        linear3 = get_linear(c, d)
+        # this joins the list items together
+        return [*linear1, *linear2, *linear3]
+
+    def get_exponential_dist(self, a, b, c, d, years):
+        pass
 
     def load_params_soe(self, path_params_soe):
         """
@@ -36,7 +44,23 @@ class InputLoader():
         scenarios = [scenario for scenario in df['scenario']]
         # remove duplicates (a set does not contain duplicates)
         scenarios = list(set(scenarios))
+        params_soe = {}
         for scenario in scenarios:
             df_scenario = df.loc[df['scenario'] == scenario]
-            # linear
-        return df
+            params_soe[scenario] = {}
+            for i in range(len(df_scenario)):
+                line = df_scenario.iloc[i]
+                # linear interpolation
+                if line['interpolation'] == 'linear':
+                    def fun(a, b, c, d, years):
+                        return self.get_linear_dist(a, b, c, d, years)
+                # exponential interpolation
+                elif line['interpolation'] == 'exponential':
+                    def fun(a, b, c, d, years):
+                        return self.get_exponential_dist(a, b, c, d, years)
+                # add params to dict of dicts
+                params_soe[scenario][line['parameter']] = fun(line[2020],
+                                                              line[2030],
+                                                              line[2040],
+                                                              line[2050], 10)
+        return params_soe
