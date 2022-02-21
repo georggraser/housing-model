@@ -6,6 +6,7 @@
 import unittest
 import os
 import sys
+import pandas as pd
 
 # this adds the root directory to our path to be able to load data from root
 FOLDER_PATH = os.path.dirname(__file__)
@@ -16,10 +17,10 @@ import input_loader
 
 IL = input_loader.InputLoader()
 
-SOE = os.path.join(FOLDER_PATH,
-                   '..',
-                   'input',
-                   'parameter_scenarios.xlsx')
+SCEN = os.path.join(FOLDER_PATH,
+                    '..',
+                    'input',
+                    'parameter_scenarios.xlsx')
 
 
 class InputLoader_test(unittest.TestCase):
@@ -31,14 +32,14 @@ class InputLoader_test(unittest.TestCase):
                           "{} not in dataframe".format(check_element))
 
     # assure that the tabula table is loaded and still in it's path
-    def test_load_params_soe(self):
+    def test_load_param(self):
         # assert that the file that is being loaded exists
-        self.assertTrue(os.path.exists(SOE))
-        df = IL.load_params_soe(SOE)
+        self.assertTrue(os.path.exists(SCEN))
+        df = pd.read_excel(SCEN)
         # test if file is empty
         self.assertIsNotNone(df)
         keys = ['scenario', 'parameter', 2020, 2030, 2040, 2050,
-                'interpolation']
+                'interpolation', 'divergence']
         # check if given keys are in dataframe
         self.check_in(keys, df.keys())
         # check if given scenarios are in dataframe
@@ -47,7 +48,7 @@ class InputLoader_test(unittest.TestCase):
         self.check_in(scenarios, df_scenarios)
         # check dataframe for null/nan rows (not allowed)
         self.assertFalse(df.isnull().values.any())
-        # iterate through scenarios and limit dataframe each time to single 
+        # iterate through scenarios and limit dataframe each time to single
         # scenario - ensure to check each scenario
         for scenario in scenarios:
             df_scenario = df.loc[df[keys[0]] == scenario]
@@ -82,6 +83,9 @@ class InputLoader_test(unittest.TestCase):
             interpolations_allowed = ['linear', 'exponential', 'gauss']
             self.check_in(interpolations, interpolations_allowed)
 
+            # TODO: excel tabelle divergence:
+            # either one floating point between 0-1
+            # or four floating points between 0-1, sperated by ', '
 
 if __name__ == '__main__':
     unittest.main()

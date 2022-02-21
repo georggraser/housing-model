@@ -5,8 +5,7 @@
 
 # IMPORTS
 
-import data_loader
-import input_loader
+import inputs
 import os
 
 # GLOBALS
@@ -38,29 +37,43 @@ SHARE_BUILDINGS_2019 = os.path.join(
     'data', 'share_buildings_2019.xlsx')
 
 # Input data - different scenarios
-SOE = os.path.join('input', 'parameter_scenarios.xlsx')
+SCENARIOS = os.path.join('input', 'parameter_scenarios.xlsx')
 
+# Hyperparameter
+HYPERPARAMETER = os.path.join('input', 'hyperparameter.xlsx')
 
 # METHODS
 
 
 def load_data():
-    dl = data_loader.DataLoader()
+    dl = inputs.DataLoader()
     df_tabula = dl.load_tabula(TABULA)
     df_dem_dev = dl.load_demographic_developement(DEMOGRAPHIC_DEVELOPEMENT)
-    df_share_buildings = dl.load_share_buildings(SHARE_BUILDINGS_2019)
-    return df_tabula, df_dem_dev, df_share_buildings
+    df_share_buildings, total_living_space = dl.load_share_buildings(
+                                                SHARE_BUILDINGS_2019)
+    return df_tabula, df_dem_dev, df_share_buildings, total_living_space
 
 
 def load_input():
-    il = input_loader.InputLoader()
-    _ = il.load_param(SOE)
+    il = inputs.InputLoader()
+    scen_params = il.load_param(SCENARIOS)
+    hyperparameter = il.load_hyperparameter(HYPERPARAMETER)
+    return scen_params, hyperparameter
+
+
+def calculate_rates(total_living_space, hyperparameter, df_dem_dev):
+    rc = inputs.RateCalculator()
+    bev_var = hyperparameter['bev_variant']
+
+
+    rc.rates(total_living_space, )
 
 
 def main():
     # load all relevant input data from the data loader
-    # load_data()
-    load_input()
+    df_tabula, df_dem_dev, df_share_buildings, total_living_space = load_data()
+    scen_params, hyper_params = load_input()
+    calculate_rates(total_living_space, hyper_params, df_dem_dev)
 
 
 if __name__ == '__main__':
