@@ -18,17 +18,25 @@ class InputLoader():
     # TODO: Ask Luisa whether this way or another
     def get_linear_dist(self, a, b, c, d, years):
         def get_linear(x, y):
-            return [(y-x)/years for i in range(years)]
-        linear1 = get_linear(a, b)
-        linear2 = get_linear(b, c)
-        linear3 = get_linear(c, d)
-        # this joins the list items together
-        return [*linear1, *linear2, *linear3]
+            linear_factor = (y-x)/years
+            linear = [x]
+            for i in range(years-1):
+                linear.append(linear[-1]+linear_factor)
+            return linear
+        linear = get_linear(a, b)
+        lin = get_linear(b, c)
+        for i in lin:
+            linear.append(i)
+        lin = get_linear(c, d)
+        for i in lin:
+            linear.append(i)
+        linear.append(d)
+        return linear
 
     def get_exponential_dist(self, a, b, c, d, years):
         pass
 
-    def load_params_soe(self, path_params_soe):
+    def load_param(self, path_param):
         """
         input headers:
         - scenario
@@ -39,15 +47,15 @@ class InputLoader():
         - 2050
         - interpolation
         """
-        df = pd.read_excel(path_params_soe)
+        df = pd.read_excel(path_param)
         # get given scenarios
         scenarios = [scenario for scenario in df['scenario']]
         # remove duplicates (a set does not contain duplicates)
         scenarios = list(set(scenarios))
-        params_soe = {}
+        param = {}
         for scenario in scenarios:
             df_scenario = df.loc[df['scenario'] == scenario]
-            params_soe[scenario] = {}
+            param[scenario] = {}
             for i in range(len(df_scenario)):
                 line = df_scenario.iloc[i]
                 # linear interpolation
@@ -59,8 +67,8 @@ class InputLoader():
                     def fun(a, b, c, d, years):
                         return self.get_exponential_dist(a, b, c, d, years)
                 # add params to dict of dicts
-                params_soe[scenario][line['parameter']] = fun(line[2020],
+                param[scenario][line['parameter']] = fun(line[2020],
                                                               line[2030],
                                                               line[2040],
                                                               line[2050], 10)
-        return params_soe
+        return param

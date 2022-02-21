@@ -54,7 +54,7 @@ def load_data():
 
 def load_input():
     il = input_loader.InputLoader()
-    _ = il.load_params_soe(SOE)
+    _ = il.load_param(SOE)
 
 
 def main():
