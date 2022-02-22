@@ -10,11 +10,11 @@ import sys
 # this adds the root directory to our path to be able to load data from root
 FOLDER_PATH = os.path.dirname(__file__)
 sys.path.insert(1, os.path.join(FOLDER_PATH, '..'))
-import data_loader
+import inputs
 
 # GLOBALS
 
-DL = data_loader.DataLoader()
+DL = inputs.DataLoader()
 
 TABULA = os.path.join(FOLDER_PATH,
                       '..',

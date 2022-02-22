@@ -45,35 +45,33 @@ HYPERPARAMETER = os.path.join('input', 'hyperparameter.xlsx')
 # METHODS
 
 
-def load_data():
+def loader(scen_params, hyperparameter):
+    # load data
     dl = inputs.DataLoader()
     df_tabula = dl.load_tabula(TABULA)
-    df_dem_dev = dl.load_demographic_developement(DEMOGRAPHIC_DEVELOPEMENT)
-    df_share_buildings, total_living_space = dl.load_share_buildings(
+    dem_dev = dl.load_demographic_developement(DEMOGRAPHIC_DEVELOPEMENT)
+    df_share_buildings, total_living_space_2019 = dl.load_share_buildings(
                                                 SHARE_BUILDINGS_2019)
-    return df_tabula, df_dem_dev, df_share_buildings, total_living_space
-
-
-def load_input():
-    il = inputs.InputLoader()
-    scen_params = il.load_param(SCENARIOS)
-    hyperparameter = il.load_hyperparameter(HYPERPARAMETER)
-    return scen_params, hyperparameter
-
-
-def calculate_rates(total_living_space, hyperparameter, df_dem_dev):
+    # calculate rates
     rc = inputs.RateCalculator()
     bev_var = hyperparameter['bev_variant']
-
-
-    rc.rates(total_living_space, )
+    bev = dem_dev[bev_var]
+    scen_params = rc.rates(total_living_space_2019, bev, scen_params)
 
 
 def main():
-    # load all relevant input data from the data loader
-    df_tabula, df_dem_dev, df_share_buildings, total_living_space = load_data()
-    scen_params, hyper_params = load_input()
-    calculate_rates(total_living_space, hyper_params, df_dem_dev)
+    # load inputs
+    il = inputs.InputLoader()
+    hyperparameter = il.load_hyperparameter(HYPERPARAMETER)
+    scen_params = il.load_param(SCENARIOS)
+    if 'all' in hyperparameter['scenario']:
+        chosen_scenarios = list(scen_params.keys())
+    else:
+        chosen_scenarios = hyperparameter['scenario']
+    # iterate through given scenarios and process them successively
+    for scen in chosen_scenarios:
+        # load all relevant data and calculate rates
+        loader(scen_params[scen], hyperparameter)
 
 
 if __name__ == '__main__':
