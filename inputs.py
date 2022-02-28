@@ -12,6 +12,11 @@ class DataLoader():
     loads data from tables and returns it as dataframe
     """
 
+    # TODO: add to tests, check that sum == 1
+    def load_dist_buildings(self, path_dist_build):
+        df = pd.read_excel(path_dist_build)
+        return df
+
     def load_share_buildings(self, path_share_buildings):
         df = pd.read_excel(path_share_buildings)
         total_living_space_2019 = df['living_space_mio.m2'].sum()

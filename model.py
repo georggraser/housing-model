@@ -13,7 +13,7 @@ import os
 # depending on the year of construction
 # TODO: genauer raussuchen: own estimations based on bbsr
 DISTRIBUTION_BUILDINGS = os.path.join(
-                                'data', 'distribution_buildings.csv')
+                                'data', 'distribution_buildings.xlsx')
 
 # demographic developement of germany based on different
 # population models
@@ -43,19 +43,13 @@ HYPERPARAMETER = os.path.join('input', 'hyperparameter.xlsx')
 
 # METHODS
 
-
-def loader(scen_params, hyperparameter):
-    # load data
-    dl = inputs.DataLoader()
-    df_tabula = dl.load_tabula(TABULA)
-    dem_dev = dl.load_demographic_developement(DEMOGRAPHIC_DEVELOPEMENT)
-    df_share_buildings, total_living_space_2019 = dl.load_share_buildings(
-                                                SHARE_BUILDINGS_2019)
-    # calculate rates
-    rc = inputs.RateCalculator()
-    bev_var = hyperparameter['bev_variant']
-    bev = dem_dev[bev_var]
-    scen_params = rc.rates(total_living_space_2019, bev, scen_params)
+def housing_model(df_tabula, df_share_buildings, dist_buildings, params):
+    # take share buildings and connect the data with df_tabula
+    df_tabula_buildings = df_tabula.merge(df_share_buildings,
+                                          left_on='identifier',
+                                          right_on='tabula_code')
+    print(df_tabula_buildings)
+    # distribute data to saniert, nicht saniert, ambitioniert saniert
 
 
 def main():
@@ -63,14 +57,26 @@ def main():
     il = inputs.InputLoader()
     hyperparameter = il.load_hyperparameter(HYPERPARAMETER)
     scen_params = il.load_param(SCENARIOS)
+    # load data
+    dl = inputs.DataLoader()
+    df_tabula = dl.load_tabula(TABULA)
+    dem_dev = dl.load_demographic_developement(DEMOGRAPHIC_DEVELOPEMENT)
+    df_share_buildings, total_living_space_2019 = dl.load_share_buildings(
+                                                SHARE_BUILDINGS_2019)
+    dist_buildings = dl.load_dist_buildings(DISTRIBUTION_BUILDINGS)
+
     if 'all' in hyperparameter['scenario']:
         chosen_scenarios = list(scen_params.keys())
     else:
         chosen_scenarios = hyperparameter['scenario']
     # iterate through given scenarios and process them successively
     for scen in chosen_scenarios:
-        # load all relevant data and calculate rates
-        loader(scen_params[scen], hyperparameter)
+        # calculate rates
+        rc = inputs.RateCalculator()
+        bev_var = hyperparameter['bev_variant']
+        bev = dem_dev[bev_var]
+        params = rc.rates(total_living_space_2019, bev, scen_params[scen])
+        housing_model(df_tabula, df_share_buildings, dist_buildings, params)
 
 
 if __name__ == '__main__':
