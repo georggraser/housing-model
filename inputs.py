@@ -21,7 +21,6 @@ class DataLoader():
         # add a column called 'percent_living_space' and insert
         # calculated values
         df.loc[:, 'percent_living_space'] = relative_living_space
-        # print(df.to_markdown())
         return df, total_living_space_2019
 
     def load_demographic_developement(self, path_demographic_dev):
@@ -32,9 +31,6 @@ class DataLoader():
         columns = 'A, D:AR'
         rows_start = 5
         rows_end = 35
-        # the not so clean hard-coded variant of names
-        # names = ['variants'] + ['31.12.20{}'.format(i+20) for i in range(41)]
-        # names=names, header=None,
         df = pd.read_excel(
             path_demographic_dev, usecols=columns,
             skiprows=rows_start, nrows=rows_end - rows_start)
@@ -91,7 +87,6 @@ class DataLoader():
             df = df.append(loader(x, y), ignore_index=True)
         # fill nans from merged cells with the correct texts
         df = df.fillna(method='ffill', axis=0)
-        # print(df.to_markdown())
         return df
 
 
@@ -101,9 +96,8 @@ class InputLoader():
     sfh = single family houses
     mfh = many family houses
     th = therasses
-    ab = ambitious
     """
-    def get_linear_dist(self, a, b, c, d, e, years, div):
+    def get_linear_interpolation(self, a, b, c, d, e, years, div):
         # check whether divergence is value or list
         if(isinstance(div, str)):
             div_factor = div.split(',')
@@ -141,7 +135,8 @@ class InputLoader():
         linear.append(e)
         return linear
 
-    def get_exponential_dist(self, a, b, c, d, e, years, div):
+    # @TODO: implement exponential interpolation
+    def get_exponential_interpolation(self, a, b, c, d, e, years, div):
         pass
 
     def load_param(self, path_param):
@@ -171,12 +166,14 @@ class InputLoader():
                 # linear interpolation
                 if line['interpolation'] == 'linear':
                     def fun(a, b, c, d, e, years, div):
-                        return self.get_linear_dist(a, b, c, d, e, years, div)
+                        return self.get_linear_interpolation(a, b, c, d, e,
+                                                             years, div)
                 # exponential interpolation
                 elif line['interpolation'] == 'exponential':
                     def fun(a, b, c, d, e, years, div):
-                        return self.get_exponential_dist(a, b, c, d, e, years,
-                                                         div)
+                        return self.get_exponential_interpolation(a, b, c, d,
+                                                                  e, years,
+                                                                  div)
                 # add params to dict of dicts
                 years = [2020, 2030, 2040, 2050, 2060]
                 scen_params[sc][line['parameter']] = fun(line[years[0]],

@@ -7,7 +7,6 @@
 
 import inputs
 import os
-
 # GLOBALS
 
 # Distribution of demolition and restoration rates
