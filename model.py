@@ -40,7 +40,7 @@ SCENARIOS = os.path.join('input', 'parameter_scenarios.xlsx')
 
 # Hyperparameter
 HYPERPARAMETER = os.path.join('input', 'hyperparameter.xlsx')
-
+ 
 # METHODS
 
 def housing_model(df_tabula, df_share_buildings, dist_buildings, params):
