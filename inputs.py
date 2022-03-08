@@ -58,31 +58,37 @@ class DataLoader():
 
         # parameters for calling the tabula
         sheet_name = 'DE Tables & Charts'
-        columns_used = {'identifier': 'F',
-                        'building_type': 'BB',
-                        'building_code': 'BC',
-                        'energy_reference_area': 'BH',
-                        'heat_provided': 'BN',
-                        'building_variant': 'BF',
-                        'hot_water_provided': 'BO',
-                        'space_heat_need': 'BL',
-                        'hot_water_need': 'BM'}
+        # {own assigned name: [tabula name, class]}
+        columns_used = {'identifier': ['F', str],
+                        'building_type': ['BB', str],
+                        'building_code': ['BC', str],
+                        'building_variant': ['BF', str],
+                        'energy_reference_area': ['BH', float],
+                        'space_heat_need': ['BL', float],
+                        'hot_water_need': ['BM', float],
+                        'heat_provided': ['BN', float],
+                        'hot_water_provided': ['BO', float]}
+        # load data from columns_used in the correct format
+        dtype = {}
         columns = ''
         names = []
         for key, value in columns_used.items():
+            dtype[key] = value[1]
             names.append(key)
-            if columns == "":
-                columns = value
+            if columns == '':
+                columns = str(value[0])
             else:
-                columns += ", " + value
+                columns += ',' + str(value[0])
 
         # load the tabula with a little method, params are the start
         # and end line numbers
         def loader(x, y):
             return pd.read_excel(
                 path_tabula, sheet_name=sheet_name, usecols=columns,
-                skiprows=x-1, nrows=y-x+1, header=None, names=names)
+                skiprows=x-1, nrows=y-x+1, header=None, names=names,
+                dtype=dtype)
 
+        # TODO: check if this is the best way to load data :)
         rows_start_end = [[147, 278], [279, 281], [288, 290], [297, 299],
                           [306, 308], [315, 317], [324, 326]]
         # dataframe with rows from line 147 to 278
@@ -123,7 +129,7 @@ class InputLoader():
             for _ in range(years_diff-1):
                 linear.append(linear[-1]+linear_factor)
             return linear
-        
+
         b = div_years(a, b, div_factor[0])
         if div_str is False:
             c = div_years(a, c, div_factor[0])
@@ -201,6 +207,9 @@ class InputLoader():
             if key == 'scenario':
                 scen = value.split(seperator)
                 hyperparameter[key] = [el.strip().lower() for el in scen]
+            elif key == 'restauration_building_type bias':
+                value = value.lower()
+                hyperparameter[key] = value
             else:
                 hyperparameter[key] = value
         return hyperparameter
@@ -215,10 +224,6 @@ class RateCalculator():
         demolition_rate_min = scen_params['demolition_rate_min']
         new_building_rate_min = scen_params['new_building_rate_min']
         living_space_pc = scen_params['living_space_pc']
-        # TODO Georg: for tests assert len equal
-        # print('Länge bev: {}'.format(len(bev)))
-        # print('Länge demolition rate: {}'.format(len(demolition_rate_min)))
-        # print('Länge new building rate: {}'.format(len(new_building_rate_min)))
 
         # calculate total living space for the whole timespan
         total_living_space = [total_living_space_2019]
@@ -254,9 +259,11 @@ class RateCalculator():
                     new_building_rate.append(new_building_rate_min[i-1])
 
                 # TODO Georg: übertragen in test
-                # test_living_space = total_living_space[i-1] * (1 + new_building_rate[i-1] - demolition_rate[i-1])
+                # test_living_space = total_living_space[i-1] *
+                # (1 + new_building_rate[i-1] - demolition_rate[i-1])
                 # null_test = total_living_space[i] - test_living_space
                 # print('{}: null-test: {}'.format(i+1, null_test))
         scen_params['demolition_rate'] = demolition_rate
         scen_params['new_building_rate'] = new_building_rate
+        scen_params['total_living_space'] = total_living_space
         return scen_params
