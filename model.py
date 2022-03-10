@@ -68,9 +68,11 @@ def housing_model(df_tabula, df_share_buildings, dist_buildings, params,
     df_tb_keys = ['building_type', 'building_code', 'building_variant',
                   'living_space_mio.m2']
     df_tab_buildings = df_tab_buildings[df_tb_keys]
+    bc_all = list(set(df_tab_buildings['building_code']))
     # TODO: add in test: check for doublettes in tabula_code
     # start with 2020 until 2060
     # which range(len(params)) doesn't matter -> it reflects the #years
+    # TODO: add some kind of years to iterate over
     for i in range(len(params['restoration_rate'])):
         # 001 means not restaurated
         bv = df_tab_buildings['building_variant']
@@ -113,23 +115,48 @@ def housing_model(df_tabula, df_share_buildings, dist_buildings, params,
         living_space_subt_1 = {}
         living_space_add_2 = {}
         living_space_add_3 = {}
+        # mask = df_tab_buildings['building_code'] == 'EFH_A'
+        # df_tmp = df_tab_buildings[mask]
+        # exit(1)
+        for x in bc_all:
+            mask = df_tab_buildings['building_code'] == x
+            for y in range(len(df_tab_buildings[mask])):
+                line = df_tab_buildings.iloc[y]
+                key = line['building_code']
+                if line['building_variant'] == '001':
+                    living_space_subt_1[key] = \
+                        line['living_space_mio.m2'] \
+                        - share_rest_area[key]
+                    df_tab_buildings.loc[x,
+                                        'calc_living_space {}'.format(2020+i)] = \
+                        living_space_subt_1[key]
+                    living_space_add_2[key] = (1 - rest_deep_amb) \
+                        * share_rest_area[key]
+                    living_space_add_3[key] = rest_deep_amb * share_rest_area[key]
+
         for x in range(len(df_tab_buildings)):
             line = df_tab_buildings.iloc[x]
             key = line['building_code']
             if line['building_variant'] == '001':
                 living_space_subt_1[key] = \
-                    line['living_space_mio.m2'] - share_rest_area[key]
-                df_tab_buildings.loc[x, 'calc_living_space {}'.format(2020+i)] = \
+                    line['living_space_mio.m2'] \
+                    - share_rest_area[key]
+                df_tab_buildings.loc[x,
+                                     'calc_living_space {}'.format(2020+i)] = \
                     living_space_subt_1[key]
                 living_space_add_2[key] = (1 - rest_deep_amb) \
                     * share_rest_area[key]
                 living_space_add_3[key] = rest_deep_amb * share_rest_area[key]
             elif line['building_variant'] == '002':
                 living_space_add_2[key] += line['living_space_mio.m2']
-                df_tab_buildings.loc[x, 'calc_living_space {}'.format(2020+i)] = living_space_add_2[key]
+                df_tab_buildings.loc[x,
+                                     'calc_living_space {}'.format(2020+i)] = \
+                    living_space_add_2[key]
             elif line['building_variant'] == '003':
                 living_space_add_3[key] += line['living_space_mio.m2']
-                df_tab_buildings.loc[x, 'calc_living_space {}'.format(2020+i)] = living_space_add_3[key]
+                df_tab_buildings.loc[x,
+                                     'calc_living_space {}'.format(2020+i)] = \
+                    living_space_add_3[key]
         print(df_tab_buildings.to_markdown())
         exit(1)
 
