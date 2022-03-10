@@ -112,53 +112,42 @@ def housing_model(df_tabula, df_share_buildings, dist_buildings, params,
                 print('NOT YET')
                 pass
         rest_deep_amb = params['restoration_deep_amb'][i]
-        living_space_subt_1 = {}
-        living_space_add_2 = {}
-        living_space_add_3 = {}
-        # mask = df_tab_buildings['building_code'] == 'EFH_A'
-        # df_tmp = df_tab_buildings[mask]
-        # exit(1)
+        # iterate through all building codes and apply the restauration
         for x in bc_all:
+            ls_sub_1 = 0
+            ls_add_2 = 0
+            ls_add_3 = 0
+            # only take the indizes of the masked dataframe and use them
+            # for the df_tab_buildings to know where the line is
             mask = df_tab_buildings['building_code'] == x
-            for y in range(len(df_tab_buildings[mask])):
+            df_masked = df_tab_buildings[mask]
+            for y in df_masked.index:
                 line = df_tab_buildings.iloc[y]
                 key = line['building_code']
+                ls_mio = line['living_space_mio.m2']
                 if line['building_variant'] == '001':
-                    living_space_subt_1[key] = \
-                        line['living_space_mio.m2'] \
-                        - share_rest_area[key]
-                    df_tab_buildings.loc[x,
-                                        'calc_living_space {}'.format(2020+i)] = \
-                        living_space_subt_1[key]
-                    living_space_add_2[key] = (1 - rest_deep_amb) \
-                        * share_rest_area[key]
-                    living_space_add_3[key] = rest_deep_amb * share_rest_area[key]
-
-        for x in range(len(df_tab_buildings)):
-            line = df_tab_buildings.iloc[x]
-            key = line['building_code']
-            if line['building_variant'] == '001':
-                living_space_subt_1[key] = \
-                    line['living_space_mio.m2'] \
-                    - share_rest_area[key]
-                df_tab_buildings.loc[x,
-                                     'calc_living_space {}'.format(2020+i)] = \
-                    living_space_subt_1[key]
-                living_space_add_2[key] = (1 - rest_deep_amb) \
-                    * share_rest_area[key]
-                living_space_add_3[key] = rest_deep_amb * share_rest_area[key]
-            elif line['building_variant'] == '002':
-                living_space_add_2[key] += line['living_space_mio.m2']
-                df_tab_buildings.loc[x,
-                                     'calc_living_space {}'.format(2020+i)] = \
-                    living_space_add_2[key]
-            elif line['building_variant'] == '003':
-                living_space_add_3[key] += line['living_space_mio.m2']
-                df_tab_buildings.loc[x,
-                                     'calc_living_space {}'.format(2020+i)] = \
-                    living_space_add_3[key]
+                    ls_sub_1 = ls_mio - share_rest_area[key]
+                    ls_add_2 = (1 - rest_deep_amb) * share_rest_area[key]
+                    ls_add_3 = rest_deep_amb * share_rest_area[key]
+                    df_tab_buildings.loc[y, 'calc_living_space {}'
+                                         .format(2020+i)] = ls_sub_1
+                elif line['building_variant'] == '002':
+                    ls_add_2 += ls_mio
+                    df_tab_buildings.loc[y, 'calc_living_space {}'
+                                         .format(2020+i)] = ls_add_2
+                elif line['building_variant'] == '003':
+                    ls_add_3 += ls_mio
+                    df_tab_buildings.loc[y, 'calc_living_space {}'
+                                         .format(2020+i)] = ls_add_3
         print(df_tab_buildings.to_markdown())
         exit(1)
+        # TODO: check if spec_rest_area < wohnfläche - dann so wie bisher
+        # else: wenn eine oder nicht alle > wohnfläche: dann umverteilen auf die anderen der unsanierten Gebäude
+        # (Gebäudeklassenübergreifend)
+        # Umverteilung: Bei welchen ist noch Platz?
+        # else: wenn es bei allen nicht klappt: 2 Möglichkeiten
+        # a) wir lassens (nicht sanieren)
+        # b) das sanierte (in building_variant 002)  wird nochmal saniert (bv 003)
 
 
 def main():
