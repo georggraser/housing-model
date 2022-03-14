@@ -15,7 +15,7 @@ import os
 # depending on the year of construction
 # TODO: genauer raussuchen: own estimations based on bbsr
 DISTRIBUTION_BUILDINGS = os.path.join(
-                                'data', 'distribution_buildings.xlsx')
+    'data', 'distribution_buildings.xlsx')
 
 # demographic developement of germany based on different
 # population models
@@ -23,7 +23,7 @@ DISTRIBUTION_BUILDINGS = os.path.join(
 # /genesis//online?operation=table&code=12421-0001& \
 # bypass=true&levelindex=0&levelid=1643115777925#abreadcrumb
 DEMOGRAPHIC_DEVELOPEMENT = os.path.join(
-                                'data', '12421-0001.xlsx')
+    'data', '12421-0001.xlsx')
 
 # Building typology data from IWU (Institut Wohnen und Umwelt),
 # https://www.iwu.de/fileadmin/tools/tabula/TABULA-Analyses_DE-Typology_DataTables.zip
@@ -74,9 +74,6 @@ def housing_model(df_tabula, df_share_buildings, dist_buildings, params,
     # which range(len(params)) doesn't matter -> it reflects the #years
     # TODO: add some kind of years to iterate over
     for i in range(len(params['restoration_rate'])):
-        # 001 means not restaurated
-        bv = df_tab_buildings['building_variant']
-        df_unrest = df_tab_buildings.loc[bv == '001']
         # calculate restoration area
         rest_area_i = params['restoration_rate'][i] \
             * params['total_living_space'][i]
@@ -84,33 +81,42 @@ def housing_model(df_tabula, df_share_buildings, dist_buildings, params,
         # calculate restauration area building-class wise
         # EFH_A --> A, MFH_A --> A, ...
         # TODO: add in test: check if building code is in ['A', 'B', ..., 'L']
-        bc = [x.split('_')[-1] for x in df_unrest['building_code']]
-        rest_area_bc = {x: rest_area_i * dist_buildings.iloc[1][x]
-                        for x in list(set(bc))}
+        bc = list(set([x.split('_')[-1]
+                  for x in df_tab_buildings['building_code']]))
+        # rest_area_bc = {x: rest_area_i * dist_buildings.iloc[1][x] for x in bc}
+
         # get percentage - distribution of house-types
         # in the different house classes (z.B. A: MFH-50%, EFH-20%, ...)
         # write total areas in dist ({A: xy_mio_m2, B: xy_mio_m2, ...})
         dist = {x: 0 for x in bc}
-        for x in range(len(df_unrest)):
-            line = df_unrest.iloc[x]
-            a_to_f = bc[x]  # line['building_code'].split('_')[-1]
-            dist[a_to_f] += line['living_space_mio.m2']
-            # print('{}: {}'.format(a_to_f, dist[a_to_f]))
-        share_buildings = {x: 0. for x in list(set(df_unrest['building_code']))}
+        # TODO: eliminate need for df_unrest
+        for x in range(len(df_tab_buildings)):
+            line = df_tab_buildings.iloc[x]
+            if line['building_variant'] == '001':
+                a_to_l = line['building_code'].split('_')[-1]
+                dist[a_to_l] += line['living_space_mio.m2']
+                # print('{}: {}'.format(a_to_f, dist[a_to_f]))
+        # 001 means not restaurated
+        bv = df_tab_buildings['building_variant']
+        df_unrest = df_tab_buildings.loc[bv == '001']
+        share_buildings = {x: 0. for x in list(
+            set(df_unrest['building_code']))}
         share_rest_area = {}
-        for x in range(len(df_unrest)):
-            line = df_unrest.iloc[x]
-            a_to_f = bc[x]  # line['building_code'].split('_')[-1]
-            share_buildings[line['building_code']] = \
-                line['living_space_mio.m2'] / dist[a_to_f]
-            if hyperparameter['restauration_building_type bias'] == 'no':
-                lbc = line['building_code']
-                share_rest_area[lbc] = share_buildings[lbc] \
-                    * rest_area_bc[a_to_f]
-                df_tab_buildings.loc[x, 'restauration area {}'.format(2020+i)] = share_rest_area[lbc]
-            elif hyperparameter['restauration_building_type bias'] == 'yes':
-                print('NOT YET')
-                pass
+        for x in range(len(df_tab_buildings)):
+            line = df_tab_buildings.iloc[x]
+            if line['building_variant'] == '001':
+                a_to_l = line['building_code'].split('_')[-1]
+                share_buildings[line['building_code']] = \
+                    line['living_space_mio.m2'] / dist[a_to_l]
+                if hyperparameter['restauration_building_type bias'] == 'no':
+                    lbc = line['building_code']
+                    share_rest_area[lbc] = share_buildings[lbc] * \
+                        rest_area_i * dist_buildings.iloc[1][a_to_l]
+                    df_tab_buildings.loc[x, 'restauration area {}'.format(
+                        2020+i)] = share_rest_area[lbc]
+                elif hyperparameter['restauration_building_type bias'] == 'yes':
+                    print('NOT YET')
+                    pass
         rest_deep_amb = params['restoration_deep_amb'][i]
         # iterate through all building codes and apply the restauration
         for x in bc_all:
@@ -142,12 +148,13 @@ def housing_model(df_tabula, df_share_buildings, dist_buildings, params,
         print(df_tab_buildings.to_markdown())
         exit(1)
         # TODO: check if spec_rest_area < wohnfläche - dann so wie bisher
-        # else: wenn eine oder nicht alle > wohnfläche: dann umverteilen auf die anderen der unsanierten Gebäude
-        # (Gebäudeklassenübergreifend)
+        # else: wenn eine oder nicht alle > wohnfläche: dann umverteilen auf
+        # die anderen der unsanierten Gebäude (Gebäudeklassenübergreifend)
         # Umverteilung: Bei welchen ist noch Platz?
         # else: wenn es bei allen nicht klappt: 2 Möglichkeiten
         # a) wir lassens (nicht sanieren)
-        # b) das sanierte (in building_variant 002)  wird nochmal saniert (bv 003)
+        # b) das sanierte (in building_variant 002)  wird nochmal saniert
+        # (bv 003)
 
 
 def main():
@@ -160,7 +167,7 @@ def main():
     df_tabula = dl.load_tabula(TABULA)
     dem_dev = dl.load_demographic_developement(DEMOGRAPHIC_DEVELOPEMENT)
     df_share_buildings, total_living_space_2019 = dl.load_share_buildings(
-                                                SHARE_BUILDINGS_2019)
+        SHARE_BUILDINGS_2019)
     dist_buildings = dl.load_dist_buildings(DISTRIBUTION_BUILDINGS)
 
     if 'all' in hyperparameter['scenario']:
@@ -174,7 +181,8 @@ def main():
         bev_var = hyperparameter['bev_variant']
         bev = dem_dev[bev_var]
         params = rc.rates(total_living_space_2019, bev, scen_params[scen])
-        housing_model(df_tabula, df_share_buildings, dist_buildings, params, hyperparameter)
+        housing_model(df_tabula, df_share_buildings,
+                      dist_buildings, params, hyperparameter)
 
 
 if __name__ == '__main__':
