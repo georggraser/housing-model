@@ -51,14 +51,93 @@ HYPERPARAMETER = os.path.join('input', 'hyperparameter.xlsx')
 # METHODS
 
 
-def translate(k):
-    pass
+def calc_dist(df_tab_buildings, bc):
+    # get percentage - distribution of house-types
+    # in the different house classes (z.B. A: MFH-50%, EFH-20%, ...)
+    # write total areas in dist ({A: xy_mio_m2, B: xy_mio_m2, ...})
+    dist = {x: 0 for x in bc}
+    # TODO: eliminate need for df_unrest
+    for x in range(len(df_tab_buildings)):
+        line = df_tab_buildings.iloc[x]
+        if line['building_variant'] == '001':
+            a_to_l = line['building_code'].split('_')[-1]
+            dist[a_to_l] += line['living_space_mio.m2']
+    return dist
+
+
+def check_restauration(share_rest_area_tmp, rest_space, share_rest_area,
+                       df_tab_buildings):
+    redistribute_space = False
+    for lbc, [v, idx] in share_rest_area_tmp.items():
+        ls_mio = df_tab_buildings.at[idx, 'living_space_mio.m2']
+        if v < ls_mio:
+            share_rest_area[lbc] = [v, idx]
+            rest_space[lbc] = [1, 0]
+        elif v == ls_mio:
+            share_rest_area[lbc] = [v, idx]
+            rest_space[lbc] = [0, 0]
+        else:
+            share_rest_area[lbc] = [ls_mio, idx]
+            rest_space[lbc] = [0, v - ls_mio]
+            redistribute_space = True
+    return redistribute_space, share_rest_area, rest_space
+
+
+def restauration(share_rest_area_tmp, df_tab_buildings):
+    # EFH_A: [1, 0] <-- rest space available (1), nothing to redistribute
+    # EFH_A: [0, 0.123] <-- rest space full (0), 0.123 to redistribute
+    rest_space = {}
+    share_rest_area = {}  # <-- EFH_A: (rest, idx)
+    redistribute_space, share_rest_area, rest_space = check_restauration(
+        share_rest_area_tmp, rest_space, share_rest_area, df_tab_buildings)
+    while redistribute_space:
+        # sum of restauration area
+        no_space_left = True
+        for [v, _] in rest_space.values():
+            if v == 1:
+                no_space_left = False
+        if no_space_left:
+            print('no space left for restauration....')
+            print(rest_space)
+            print(share_rest_area)
+            exit(1)
+        rest_sum = sum([x for [x, _] in share_rest_area.values()])
+        rest_dist_raw = {k: [x/rest_sum, idx] for k, [x, idx]
+                         in share_rest_area.items()}
+        dist_space_keys = [k for k, [a, _] in rest_space.items() if a == 0]
+        dist_space_values = []
+        for k in dist_space_keys:
+            dist_space_values.append(rest_dist_raw[k][0])
+        dist_space_sum = sum(dist_space_values)
+        rest_dist_factor = 1 / (1 - dist_space_sum)
+        rest_dist = {k: [rdr * rest_dist_factor, idx] for k, [rdr, idx]
+                     in rest_dist_raw.items() if k not in dist_space_keys}
+
+        space_values = [b for [a, b] in rest_space.values() if a == 0]
+        rest_diff = []
+        for b in space_values:
+            rest_diff.append(b)
+        rest_diff_sum = sum(rest_diff)
+        add_rest_area = {k: [rdr * rest_diff_sum, idx] for k, [rdr, idx]
+                         in rest_dist.items()}
+
+        # add add_rest_area to share_rest_area
+        share_rest_area_tmp = {}
+        for k in share_rest_area.keys():
+            if k in add_rest_area.keys():
+                share_rest_area_tmp[k] = share_rest_area[k]
+                share_rest_area_tmp[k][0] += add_rest_area[k][0]
+
+    redistribute_space, share_rest_area, rest_space = check_restauration(
+        share_rest_area_tmp, rest_space, share_rest_area, df_tab_buildings)
+    return share_rest_area
 
 
 def housing_model(df_tabula, df_share_buildings, dist_buildings, params,
                   hyperparameter):
     # take share buildings and connect the data with df_tabula
     # only merge where living space != nan in df_share_buildings
+
     df_share_buildings = df_share_buildings.loc[
         df_share_buildings['living_space_mio.m2'] > 0]
     df_tab_buildings = df_tabula.merge(df_share_buildings,
@@ -74,49 +153,42 @@ def housing_model(df_tabula, df_share_buildings, dist_buildings, params,
     # which range(len(params)) doesn't matter -> it reflects the #years
     # TODO: add some kind of years to iterate over
     for i in range(len(params['restoration_rate'])):
-        # calculate restoration area
-        rest_area_i = params['restoration_rate'][i] \
-            * params['total_living_space'][i]
         # restoration_area.append(rest_area_i)
         # calculate restauration area building-class wise
         # EFH_A --> A, MFH_A --> A, ...
         # TODO: add in test: check if building code is in ['A', 'B', ..., 'L']
         bc = list(set([x.split('_')[-1]
                   for x in df_tab_buildings['building_code']]))
-        # rest_area_bc = {x: rest_area_i * dist_buildings.iloc[1][x] for x in bc}
+        dist = calc_dist(df_tab_buildings, bc)
 
-        # get percentage - distribution of house-types
-        # in the different house classes (z.B. A: MFH-50%, EFH-20%, ...)
-        # write total areas in dist ({A: xy_mio_m2, B: xy_mio_m2, ...})
-        dist = {x: 0 for x in bc}
-        # TODO: eliminate need for df_unrest
-        for x in range(len(df_tab_buildings)):
-            line = df_tab_buildings.iloc[x]
-            if line['building_variant'] == '001':
-                a_to_l = line['building_code'].split('_')[-1]
-                dist[a_to_l] += line['living_space_mio.m2']
-                # print('{}: {}'.format(a_to_f, dist[a_to_f]))
         # 001 means not restaurated
         bv = df_tab_buildings['building_variant']
         df_unrest = df_tab_buildings.loc[bv == '001']
         share_buildings = {x: 0. for x in list(
             set(df_unrest['building_code']))}
-        share_rest_area = {}
-        for x in range(len(df_tab_buildings)):
-            line = df_tab_buildings.iloc[x]
+        # calculate restoration area
+        rest_area_i = params['restoration_rate'][i] \
+            * params['total_living_space'][i]
+        # EFH_A: [value, idx]
+        share_rest_area_tmp = {}
+        for idx in range(len(df_tab_buildings)):
+            line = df_tab_buildings.iloc[idx]
             if line['building_variant'] == '001':
                 a_to_l = line['building_code'].split('_')[-1]
-                share_buildings[line['building_code']] = \
-                    line['living_space_mio.m2'] / dist[a_to_l]
+                ls_mio = line['living_space_mio.m2']
+                share_buildings[line['building_code']] = ls_mio / dist[a_to_l]
                 if hyperparameter['restauration_building_type bias'] == 'no':
                     lbc = line['building_code']
-                    share_rest_area[lbc] = share_buildings[lbc] * \
-                        rest_area_i * dist_buildings.iloc[1][a_to_l]
-                    df_tab_buildings.loc[x, 'restauration area {}'.format(
-                        2020+i)] = share_rest_area[lbc]
+                    share_rest_area_tmp[lbc] = [share_buildings[lbc] *
+                                                rest_area_i *
+                                                dist_buildings.iloc[1][a_to_l],
+                                                idx]
                 elif hyperparameter['restauration_building_type bias'] == 'yes':
                     print('NOT YET')
-                    pass
+        share_rest_area = restauration(share_rest_area_tmp, df_tab_buildings)
+        for (v, idx) in share_rest_area.values():
+            df_tab_buildings.loc[idx, 'restauration area {}'.format(
+                2020+i)] = v
         rest_deep_amb = params['restoration_deep_amb'][i]
         # iterate through all building codes and apply the restauration
         for x in bc_all:
@@ -132,9 +204,9 @@ def housing_model(df_tabula, df_share_buildings, dist_buildings, params,
                 key = line['building_code']
                 ls_mio = line['living_space_mio.m2']
                 if line['building_variant'] == '001':
-                    ls_sub_1 = ls_mio - share_rest_area[key]
-                    ls_add_2 = (1 - rest_deep_amb) * share_rest_area[key]
-                    ls_add_3 = rest_deep_amb * share_rest_area[key]
+                    ls_sub_1 = ls_mio - share_rest_area[key][0]
+                    ls_add_2 = (1 - rest_deep_amb) * share_rest_area[key][0]
+                    ls_add_3 = rest_deep_amb * share_rest_area[key][0]
                     df_tab_buildings.loc[y, 'calc_living_space {}'
                                          .format(2020+i)] = ls_sub_1
                 elif line['building_variant'] == '002':
