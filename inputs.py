@@ -228,23 +228,24 @@ class RateCalculator():
         living_space_pc = scen_params['living_space_pc']
 
         # calculate total living space for the whole timespan
-        total_living_space = [total_living_space_2019]
-        for pop, ls_pc in zip(bev, living_space_pc):
-            total_living_space.append(pop*ls_pc)
+        total_living_space = [[total_living_space_2019, '2019']]
+        for i, (pop, ls_pc) in enumerate(zip(bev, living_space_pc)):
+            total_living_space.append([pop*ls_pc, '{}'.format(2020+i)])
         # calc living space from min (new_building_rate and demolition_rate)
         calc_living_space = [total_living_space_2019]
         for i, (nbr_min, dr_min) in enumerate(zip(new_building_rate_min,
                                                   demolition_rate_min)):
-            tmp_living_space = total_living_space[i] * (1 + nbr_min - dr_min)
+            tmp_living_space = total_living_space[i][0] * \
+                (1 + nbr_min - dr_min)
             calc_living_space.append(tmp_living_space)
         # compare total and calc_living_space
         new_building_rate = []
         demolition_rate = []
-        for i, (total, calc) in enumerate(zip(total_living_space,
-                                              calc_living_space)):
+        for i, ([total, _], calc) in enumerate(zip(total_living_space,
+                                                   calc_living_space)):
             # case i=0: year 2019 - we needed data from 2018 - we don't need
             if i > 0:
-                diff_rate = (total - calc) / total_living_space[i-1]
+                diff_rate = (total - calc) / total_living_space[i-1][0]
                 if diff_rate > 0:
                     # case too few buildings
                     new_building_rate.append(new_building_rate_min[i-1]
@@ -267,5 +268,6 @@ class RateCalculator():
                 # print('{}: null-test: {}'.format(i+1, null_test))
         scen_params['demolition_rate'] = demolition_rate
         scen_params['new_building_rate'] = new_building_rate
-        scen_params['total_living_space'] = total_living_space
+        total_ls_dict = {year: total for [total, year] in total_living_space}
+        scen_params['total_living_space'] = total_ls_dict
         return scen_params
