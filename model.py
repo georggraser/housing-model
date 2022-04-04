@@ -61,7 +61,7 @@ def calc_dist(df_tab_buildings, bc, bv_r):
         line = df_tab_buildings.iloc[x]
         if line['building_variant'] == bv_r:
             a_to_l = line['building_code'].split('_')[-1]
-            dist[a_to_l] += line['living_space_mio.m2']
+            dist[a_to_l] += line['living_space_mio.m2_2019']
     return dist
 
 
@@ -78,7 +78,7 @@ def calc_r_ic(df_tab_buildings, hyperparameter,
         line = df_tab_buildings.iloc[idx]
         if line['building_variant'] == bv_r:
             a_to_l = line['building_code'].split('_')[-1]
-            ls_mio = line['living_space_mio.m2']
+            ls_mio = line['living_space_mio.m2_2019']
             lbc = line['building_code']
             share_buildings = ls_mio / dist[a_to_l]
             if hyperparameter['restauration_building_type bias'] == 'no':
@@ -102,7 +102,7 @@ def check_restauration(r_ic, r_rem, r_final,
     """
     r_rem_check = False
     for lbc, [v, idx] in r_ic.items():
-        ls_mio = df_tab_buildings.at[idx, 'living_space_mio.m2']
+        ls_mio = df_tab_buildings.at[idx, 'living_space_mio.m2_2019']
         if v < ls_mio:
             r_final[lbc] = [v, idx]
             r_rem[lbc] = [1, 0]
@@ -185,7 +185,7 @@ def apply_restauration(df_tab_buildings, r_final, params, i):
         for y in df_masked.index:
             line = df_tab_buildings.iloc[y]
             key = line['building_code']
-            ls_mio = line['living_space_mio.m2']
+            ls_mio = line['living_space_mio.m2_2019']
             if line['building_variant'] == '001':
                 ls_sub_1 = ls_mio - r_final[key][0]
                 ls_add_2 = (1 - rest_deep_amb) * r_final[key][0]
@@ -209,19 +209,17 @@ def housing_model(df_tabula, df_share_buildings, dist_buildings, params,
     # only merge where living space != nan in df_share_buildings
 
     df_share_buildings = df_share_buildings.loc[
-        df_share_buildings['living_space_mio.m2'] > 0]
+        df_share_buildings['living_space_mio.m2_2019'] > 0]
     df_tab_buildings = df_tabula.merge(df_share_buildings,
                                        left_on='identifier',
                                        right_on='tabula_code')
     # only use the columns we need
     df_tb_keys = ['building_type', 'building_code', 'building_variant',
-                  'living_space_mio.m2']
+                  'living_space_mio.m2_2019']
     df_tab_buildings = df_tab_buildings[df_tb_keys]
     # TODO: add in test: check for doublettes in tabula_code
     # start with 2020 until 2060
-    # which range(len(params)) doesn't matter -> it reflects the #years
-    # TODO: add some kind of years to iterate over
-    for i in range(len(params['restoration_rate'])):
+    for i in range(len(params['years'])):
         # restoration_area.append(rest_area_i)
         # calculate restauration area building-class wise
         # calculate restoration area
@@ -245,7 +243,7 @@ def housing_model(df_tabula, df_share_buildings, dist_buildings, params,
                 for idx in range(len(df_tab_buildings)):
                     line = df_tab_buildings.loc[idx]
                     if line['building_variant'] == bv_r:
-                        ls_mio.append(line['living_space_mio.m2'])
+                        ls_mio.append(line['living_space_mio.m2_2019'])
                         cls.append(line['calc_living_space 2020'])
                 r_a = sum(ls_mio) - sum(cls) + r_carryover_002
                 print(r_carryover_002)

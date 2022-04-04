@@ -19,9 +19,9 @@ class DataLoader():
 
     def load_share_buildings(self, path_share_buildings):
         df = pd.read_excel(path_share_buildings)
-        total_living_space_2019 = df['living_space_mio.m2'].sum()
+        total_living_space_2019 = df['living_space_mio.m2_2019'].sum()
         relative_living_space = [x / total_living_space_2019
-                                 for x in df['living_space_mio.m2']
+                                 for x in df['living_space_mio.m2_2019']
                                  if x is not nan]
         # add a column called 'percent_living_space' and insert
         # calculated values
@@ -108,6 +108,7 @@ class InputLoader():
     mfh = many family houses
     th = therasses
     """
+
     def get_linear_interpolation(self, a, b, c, d, e, years, div):
         # check whether divergence is value or list
         if(isinstance(div, str)):
@@ -194,6 +195,7 @@ class InputLoader():
                                                          line[years[4]],
                                                          years,
                                                          line['divergence'])
+                scen_params[sc]['years'] = [k for k in range(2020, 2061)]
         return scen_params
 
     def load_hyperparameter(self, path_hyperparam):
