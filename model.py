@@ -91,7 +91,10 @@ def calc_r_ic(df_tab_buildings, hyperparameter, dist_buildings,
                 calc_ls = 'calc_living_space {}'.format(current_year)
                 ls_mio = line[calc_ls]
             lbc = line['building_code']
-            share_buildings = ls_mio / dist[a_to_l]
+            if dist[a_to_l] == 0:
+                share_buildings = 0
+            else:
+                share_buildings = ls_mio / dist[a_to_l]
             if hyperparameter['restauration_building_type bias'] == 'no':
                 r_d_ic[lbc] = [share_buildings *
                                r_d_area_i *
@@ -223,6 +226,69 @@ def apply_r_d(df_tab_buildings, r_d_col, r_deep_amb,
     return df_tab_buildings
 
 
+def restauration(params, i, hyperparameter, dist_buildings, bv_r_d, current_year, df_tab_buildings):
+    # restoration calculation begins
+    r_area_i = params['restoration_rate'][i] \
+        * params['total_living_space']['{}'.format(2019 + i)]  # total ls from last year (initially 2019)
+    r_final, r_carryover_002 = calc_r_d_final(hyperparameter,
+                                              dist_buildings,
+                                              df_tab_buildings,
+                                              r_area_i, bv_r_d,
+                                              current_year,
+                                              is_r=True)
+    r_col = 'restauration area {}'.format(current_year)
+    for (v, idx) in r_final.values():
+        df_tab_buildings.loc[idx, r_col] = v
+
+    r_deep_amb = params['restoration_deep_amb'][i]
+    df_tab_buildings = apply_r_d(df_tab_buildings, r_col, r_deep_amb,
+                                 current_year, is_r=True)
+
+    # TODO: this ain't working alright - repair - dead code ahead
+    if r_carryover_002 != 0:
+        if hyperparameter['second_amb_restauration'] == 'yes':
+            ls_mio = []
+            cls = []
+            for idx in range(len(df_tab_buildings)):
+                line = df_tab_buildings.loc[idx]
+                if line['building_variant'] == bv_r_d:
+                    ls_mio.append(line['living_space_mio.m2_2019'])
+                    cls.append(line['calc_living_space 2020'])
+            r_a = sum(ls_mio) - sum(cls) + r_carryover_002
+            print(r_carryover_002)
+            print(r_a)
+            print(r_area_i)
+            bv_r = '002'
+            r_final, _ = calc_r_d_final(hyperparameter,
+                                        dist_buildings,
+                                        df_tab_buildings,
+                                        r_carryover_002, bv_r,
+                                        current_year,
+                                        is_r=True)
+            for (v, idx) in r_final.values():
+                df_tab_buildings.loc[idx, r_col] = v
+    return df_tab_buildings
+
+
+def demolition(params, i, hyperparameter, dist_buildings, bv_r_d, current_year, df_tab_buildings):
+    # demolition calculation begins
+    d_area_i = params['demolition_rate'][i] \
+        * params['total_living_space']['{}'.format(2019 + i)]  # total ls from last year (initially 2019)
+    d_final, d_carryover_002 = calc_r_d_final(hyperparameter,
+                                              dist_buildings,
+                                              df_tab_buildings,
+                                              d_area_i, bv_r_d,
+                                              current_year,
+                                              is_r=False)
+    d_col = 'demolition area {}'.format(current_year)
+    for (v, idx) in d_final.values():
+        df_tab_buildings.loc[idx, d_col] = v
+
+    df_tab_buildings = apply_r_d(df_tab_buildings, d_col, None,
+                                 current_year, is_r=False)
+    return df_tab_buildings
+
+
 def housing_model(df_tabula, df_share_buildings, dist_buildings, params,
                   hyperparameter):
     # take share buildings and connect the data with df_tabula
@@ -242,63 +308,11 @@ def housing_model(df_tabula, df_share_buildings, dist_buildings, params,
     # start with 2020 until 2060
     for i in range(len(params['years'])):
         current_year = params['years'][i]
+        df_tab_buildings = restauration(
+            params, i, hyperparameter, dist_buildings, bv_r_d, current_year, df_tab_buildings)
+        df_tab_buildings = demolition(
+            params, i, hyperparameter, dist_buildings, bv_r_d, current_year, df_tab_buildings)
 
-        # restoration calculation begins
-        r_area_i = params['restoration_rate'][i] \
-            * params['total_living_space']['{}'.format(2019 + i)]  # total ls from last year (initially 2019)
-        r_final, r_carryover_002 = calc_r_d_final(hyperparameter,
-                                                  dist_buildings,
-                                                  df_tab_buildings,
-                                                  r_area_i, bv_r_d,
-                                                  current_year,
-                                                  is_r=True)
-        r_col = 'restauration area {}'.format(current_year)
-        for (v, idx) in r_final.values():
-            df_tab_buildings.loc[idx, r_col] = v
-
-        r_deep_amb = params['restoration_deep_amb'][i]
-        df_tab_buildings = apply_r_d(df_tab_buildings, r_col, r_deep_amb,
-                                     current_year, is_r=True)
-
-        # TODO: this ain't working alright - repair - dead code ahead
-        if r_carryover_002 != 0:
-            if hyperparameter['second_amb_restauration'] == 'yes':
-                ls_mio = []
-                cls = []
-                for idx in range(len(df_tab_buildings)):
-                    line = df_tab_buildings.loc[idx]
-                    if line['building_variant'] == bv_r_d:
-                        ls_mio.append(line['living_space_mio.m2_2019'])
-                        cls.append(line['calc_living_space 2020'])
-                r_a = sum(ls_mio) - sum(cls) + r_carryover_002
-                print(r_carryover_002)
-                print(r_a)
-                print(r_area_i)
-                bv_r = '002'
-                r_final, _ = calc_r_d_final(hyperparameter,
-                                            dist_buildings,
-                                            df_tab_buildings,
-                                            r_carryover_002, bv_r,
-                                            current_year,
-                                            is_r=True)
-                for (v, idx) in r_final.values():
-                    df_tab_buildings.loc[idx, r_col] = v
-
-        # demolition calculation begins
-        d_area_i = params['demolition_rate'][i] \
-            * params['total_living_space']['{}'.format(2019 + i)]  # total ls from last year (initially 2019)
-        d_final, d_carryover_002 = calc_r_d_final(hyperparameter,
-                                                  dist_buildings,
-                                                  df_tab_buildings,
-                                                  d_area_i, bv_r_d,
-                                                  current_year,
-                                                  is_r=False)
-        d_col = 'demolition area {}'.format(current_year)
-        for (v, idx) in d_final.values():
-            df_tab_buildings.loc[idx, d_col] = v
-
-        df_tab_buildings = apply_r_d(df_tab_buildings, d_col, None,
-                                     current_year, is_r=False)
         print(df_tab_buildings.to_markdown())
         exit(1)
         # TODO: check if spec_rest_area < wohnfläche - dann so wie bisher
