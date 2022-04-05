@@ -308,10 +308,12 @@ def housing_model(df_tabula, df_share_buildings, dist_buildings, params,
     # start with 2020 until 2060
     for i in range(len(params['years'])):
         current_year = params['years'][i]
-        df_tab_buildings = restauration(
-            params, i, hyperparameter, dist_buildings, bv_r_d, current_year, df_tab_buildings)
-        df_tab_buildings = demolition(
-            params, i, hyperparameter, dist_buildings, bv_r_d, current_year, df_tab_buildings)
+        df_tab_buildings = restauration(params, i, hyperparameter,
+                                        dist_buildings, bv_r_d, current_year,
+                                        df_tab_buildings)
+        df_tab_buildings = demolition(params, i, hyperparameter,
+                                      dist_buildings, bv_r_d,
+                                      current_year, df_tab_buildings)
 
         print(df_tab_buildings.to_markdown())
         exit(1)
