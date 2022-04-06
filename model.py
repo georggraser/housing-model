@@ -226,10 +226,11 @@ def apply_r_d(df_tab_buildings, r_d_col, r_deep_amb,
     return df_tab_buildings
 
 
-def restauration(params, i, hyperparameter, dist_buildings, bv_r_d, current_year, df_tab_buildings):
-    # restoration calculation begins
+def restauration(params, i, hyperparameter, dist_buildings, bv_r_d,
+                 current_year, df_tab_buildings):
+    # total ls from last year (initially 2019)
     r_area_i = params['restoration_rate'][i] \
-        * params['total_living_space']['{}'.format(2019 + i)]  # total ls from last year (initially 2019)
+        * params['total_living_space']['{}'.format(2019 + i)]
     r_final, r_carryover_002 = calc_r_d_final(hyperparameter,
                                               dist_buildings,
                                               df_tab_buildings,
@@ -270,10 +271,11 @@ def restauration(params, i, hyperparameter, dist_buildings, bv_r_d, current_year
     return df_tab_buildings
 
 
-def demolition(params, i, hyperparameter, dist_buildings, bv_r_d, current_year, df_tab_buildings):
-    # demolition calculation begins
+def demolition(params, i, hyperparameter, dist_buildings, bv_r_d,
+               current_year, df_tab_buildings):
+    # total ls from last year (initially 2019)
     d_area_i = params['demolition_rate'][i] \
-        * params['total_living_space']['{}'.format(2019 + i)]  # total ls from last year (initially 2019)
+        * params['total_living_space']['{}'.format(2019 + i)]
     d_final, d_carryover_002 = calc_r_d_final(hyperparameter,
                                               dist_buildings,
                                               df_tab_buildings,
