@@ -51,7 +51,7 @@ HYPERPARAMETER = os.path.join('input', 'hyperparameter.xlsx')
 # METHODS
 
 
-def calc_dist(df_tab_buildings, bc, bv_r_d, current_year, is_r):
+def calc_dist(df_tab_buildings, bc, bv_r_d, current_year, is_r, calc_ls):
     # get percentage - distribution of house-types
     # in the different house classes (z.B. A: MFH-50%, EFH-20%, ...)
     # write total areas in dist ({A: ls_, B: ls_ ...})
@@ -65,19 +65,18 @@ def calc_dist(df_tab_buildings, bc, bv_r_d, current_year, is_r):
                 ls_mio = line['living_space_{}'.format(
                     current_year-1)]
             else:
-                calc_ls = 'calc_living_space {}'.format(current_year)
                 ls_mio = line[calc_ls]
             dist[a_to_l] += ls_mio
     return dist
 
 
 def calc_r_ic(df_tab_buildings, hyperparameter, dist_buildings,
-              r_d_area_i, bv_r_d, current_year, is_r):
+              r_d_area_i, bv_r_d, current_year, is_r, calc_ls):
     # EFH_A --> A, MFH_A --> A, ...
     # TODO: add in test: check if building code is in ['A', 'B', ..., 'L']
     bc = list(set([x.split('_')[-1]
                    for x in df_tab_buildings['building_code']]))
-    dist = calc_dist(df_tab_buildings, bc, bv_r_d, current_year, is_r)
+    dist = calc_dist(df_tab_buildings, bc, bv_r_d, current_year, is_r, calc_ls)
 
     r_d_ic = {}   # EFH_A: [value, idx]
     for idx in range(len(df_tab_buildings)):
@@ -88,7 +87,6 @@ def calc_r_ic(df_tab_buildings, hyperparameter, dist_buildings,
                 ls_mio = line['living_space_{}'.format(
                     current_year-1)]
             else:
-                calc_ls = 'calc_living_space {}'.format(current_year)
                 ls_mio = line[calc_ls]
             lbc = line['building_code']
             if dist[a_to_l] == 0:
@@ -106,7 +104,7 @@ def calc_r_ic(df_tab_buildings, hyperparameter, dist_buildings,
 
 
 def check_r_d(r_d_ic, r_d_rem, r_d_final, df_tab_buildings,
-              current_year, is_r):
+              current_year, is_r, calc_ls):
     """
     short description
     Params: 
@@ -120,7 +118,6 @@ def check_r_d(r_d_ic, r_d_rem, r_d_final, df_tab_buildings,
             ls_mio = df_tab_buildings.at[idx, 'living_space_{}'.format(
                 current_year-1)]
         else:
-            calc_ls = 'calc_living_space {}'.format(current_year)
             ls_mio = df_tab_buildings.at[idx, calc_ls]
         if v < ls_mio:
             r_d_final[lbc] = [v, idx]
@@ -136,68 +133,92 @@ def check_r_d(r_d_ic, r_d_rem, r_d_final, df_tab_buildings,
 
 
 def calc_r_d_final(hyperparameter, dist_buildings, df_tab_buildings,
-                   r_d_area_i, bv_r_d, current_year, is_r):
+                   r_d_area_i, bv_r_d, current_year, calc_ls, is_r):
     # EFH_A: [1, 0] <-- rest space available (1), nothing to redistribute
     # EFH_A: [0, 0.123] <-- rest space full (0), 0.123 to redistribute
     r_d_rem = {}  # restoration remaining
     r_d_final = {}  # EFH_A: (rest, idx) restoration
-    r_d_carryover_002 = 0   # sum of restauration that can't be distributed
+    r_carryover_002 = 0   # sum of restauration that can't be distributed
     r_d_ic = calc_r_ic(df_tab_buildings, hyperparameter, dist_buildings,
-                       r_d_area_i, bv_r_d, current_year, is_r)
-    r_d_rem_check, r_d_final, r_d_rem = check_r_d(
-        r_d_ic, r_d_rem, r_d_final, df_tab_buildings, current_year, is_r)
-    # sum of restauration area
+                       r_d_area_i, bv_r_d, current_year, is_r, calc_ls)
+    r_d_rem_check, r_d_final, r_d_rem = check_r_d(r_d_ic, r_d_rem, r_d_final,
+                                                  df_tab_buildings,
+                                                  current_year, is_r, calc_ls)
+
+    # sum of restauration/demolition area
     r_d_sum_ic = sum([x for [x, _] in r_d_final.values()])
-    r_d_share_initial = {k: [x/r_d_sum_ic, idx] for k, [x, idx]
-                         in r_d_final.items()}
-    r_d_total_rem = r_d_area_i - sum([k for [k, _] in r_d_final.values()])
-    if r_d_total_rem > 0.001:
-        r_d_rem_check = True
-    while r_d_rem_check:
-        r_d_dist_keys = [k for k, [a, _] in r_d_rem.items() if a == 0]
-        r_d_share_rem = []  # share of remaining restoration area
-        for k in r_d_dist_keys:
-            if k in r_d_share_initial.keys():
-                r_d_share_rem.append(r_d_share_initial[k][0])
-
-        r_d_dist_factor = 1 / (1 - sum(r_d_share_rem))
-        r_d_share_ic = {k: [share * r_d_dist_factor, idx] for k, [share, idx]
-                        in r_d_share_initial.items() if k not in r_d_dist_keys}
+    # check for area to be restaurated/demolished. No area left, nothing to do
+    if r_d_sum_ic == 0:
+        return r_d_final, r_carryover_002
+    else:
+        r_d_share_initial = {k: [x/r_d_sum_ic, idx] for k, [x, idx]
+                             in r_d_final.items()}
         r_d_total_rem = r_d_area_i - sum([k for [k, _] in r_d_final.values()])
-        add_r_d = {k: [share * r_d_total_rem, idx] for k, [share, idx]
-                   in r_d_share_ic.items()}
-
-        # add add_r_d to r_d_final
-        r_d_ic = {}
-        for k in r_d_final.keys():
-            if k in add_r_d.keys():
-                r_d_ic[k] = r_d_final[k]
-                r_d_ic[k][0] += add_r_d[k][0]
-
-        r_d_rem_check, r_d_final, r_d_rem = check_r_d(
-            r_d_ic, r_d_rem, r_d_final, df_tab_buildings, current_year, is_r)
-
         if r_d_total_rem > 0.001:
             r_d_rem_check = True
+        while r_d_rem_check:
+            r_d_dist_keys = [k for k, [a, _] in r_d_rem.items() if a == 0]
+            r_d_share_rem = []  # share of remaining rest/dem area
+            for k in r_d_dist_keys:
+                if k in r_d_share_initial.keys():
+                    r_d_share_rem.append(r_d_share_initial[k][0])
 
-        r_d_share_initial = r_d_share_ic
-        # check for space in restauration area
-        # if no space left is true, all
-        no_ls_001_check = True
-        for k, [v, _] in r_d_rem.items():
-            if v == 1 and r_d_final[k][0] != 0.:
-                no_ls_001_check = False
+            # don't let it divide by 0
+            if sum(r_d_share_rem) > 0.999:
+                r_d_rem_check = True
                 break
-        # TODO: repair and implement.
-        if no_ls_001_check:
-            r_d_carryover_002 = sum([v for [_, v] in r_d_rem.values()])
-            print('WARNING - you are leaving well-coded area')
-            r_d_carryover_002 = 0
-    return r_d_final, r_d_carryover_002
+
+            r_d_dist_factor = 1 / (1 - sum(r_d_share_rem))
+            r_d_share_ic = {k: [share * r_d_dist_factor, idx] for
+                            k, [share, idx] in r_d_share_initial.items()
+                            if k not in r_d_dist_keys}
+            r_d_total_rem = r_d_area_i - \
+                sum([k for [k, _] in r_d_final.values()])
+            add_r_d = {k: [share * r_d_total_rem, idx] for k, [share, idx]
+                       in r_d_share_ic.items()}
+
+            # add add_r_d to r_d_final
+            r_d_ic = {}
+            for k in r_d_final.keys():
+                if k in add_r_d.keys():
+                    r_d_ic[k] = r_d_final[k]
+                    r_d_ic[k][0] += add_r_d[k][0]
+
+            r_d_rem_check, r_d_final, r_d_rem = check_r_d(r_d_ic, r_d_rem,
+                                                          r_d_final,
+                                                          df_tab_buildings,
+                                                          current_year, is_r,
+                                                          calc_ls)
+
+            if r_d_total_rem > 0.001:
+                r_d_rem_check = True
+
+            r_d_share_initial = r_d_share_ic
+            # check for space in restauration area
+            # if no space left is true, all
+            no_ls_001_check = True
+            for k, [v, _] in r_d_rem.items():
+                if v == 1 and r_d_final[k][0] != 0.:
+                    no_ls_001_check = False
+                    break
+            # TODO: repair and implement.
+            if no_ls_001_check:
+                if is_r:
+                    if hyperparameter['second_amb_restauration'] == 'no':
+                        r_d_rem_check = True
+                    elif hyperparameter['second_amb_restauration'] == 'yes':
+                        r_carryover_002 = sum(
+                            [v for [_, v] in r_d_rem.values()])
+                        print('WARNING - you are leaving well-coded area')
+                        r_carryover_002 = 0
+                else:
+                    # for demolition: let the leftovers where they are
+                    r_d_rem_check = True
+        return r_d_final, r_carryover_002
 
 
 def apply_r_d(df_tab_buildings, r_d_col, r_deep_amb,
-              current_year, is_r):
+              current_year, calc_ls, is_r):
     bc_all = list(set(df_tab_buildings['building_code']))
     # iterate through all building codes and apply the restauration
     for x in bc_all:
@@ -208,7 +229,6 @@ def apply_r_d(df_tab_buildings, r_d_col, r_deep_amb,
         # for the df_tab_buildings to know where the line is
         mask = df_tab_buildings['building_code'] == x
         df_masked = df_tab_buildings[mask]
-        calc_ls = 'calc_living_space {}'.format(current_year)
         for y in df_masked.index:
             line = df_tab_buildings.iloc[y]
             if is_r:
@@ -230,37 +250,52 @@ def apply_r_d(df_tab_buildings, r_d_col, r_deep_amb,
     return df_tab_buildings
 
 
-<<<<<<< HEAD
+def apply_nb(df_tab_buildings, nb_area_i, i, params, current_year, calc_ls):
+    nb_sfh_area = params['new_building_share_sfh'][i] * nb_area_i
+    nb_th_area = params['new_building_share_th'][i] * nb_area_i
+    nb_mfh_area = params['new_building_share_mfh'][i] * nb_area_i
+    nb_amb = params['new_building_deep_amb'][i]
+    nb_col = 'new_building_area_{}'.format(current_year)
+
+    def set_values(line, bc, area, nb_amb, df_tab_buildings, idx):
+        if line['building_code'] == bc and line['building_variant'] == '002':
+            df_tab_buildings.loc[idx, nb_col] = area * (1-nb_amb)
+        elif line['building_code'] == bc and line['building_variant'] == '003':
+            df_tab_buildings.loc[idx, nb_col] = area * nb_amb
+        return df_tab_buildings
+    for idx in range(len(df_tab_buildings)):
+        line = df_tab_buildings.iloc[idx]
+        df_tab_buildings.loc[idx, nb_col] = 0
+        df_tab_buildings = set_values(
+            line, 'EFH_L', nb_sfh_area, nb_amb, df_tab_buildings, idx)
+        df_tab_buildings = set_values(
+            line, 'MFH_L', nb_th_area, nb_amb, df_tab_buildings, idx)
+        df_tab_buildings = set_values(
+            line, 'RH_L', nb_mfh_area, nb_amb, df_tab_buildings, idx)
+
+    df_tab_buildings.loc[:, 'living_space_{}'.format(current_year)] = \
+        df_tab_buildings[calc_ls] + df_tab_buildings[nb_col]
+    return df_tab_buildings
+
+
 def restauration(params, i, hyperparameter, dist_buildings, bv_r_d,
-                 current_year, df_tab_buildings):
-    # total ls from last year (initially 2019)
-=======
-def apply_nb(df_tab_buildings, nb_area_i, i, params):
-    nb_sfh = params['new_building_share_sfh'][i]
-    nb_th = params['new_building_share_th'][i]
-    nb_mfh = params['new_building_share_mfh'][i]
-    nb_ab = params['new_building_share_ab'][i]
-
-
-def restauration(params, i, hyperparameter, dist_buildings, bv_r_d, 
-                 current_year, df_tab_buildings):
+                 current_year, df_tab_buildings, calc_ls):
     # restoration calculation begins
->>>>>>> d52ccd4130cfbb4965a3287c99cded22e4804152
     r_area_i = params['restoration_rate'][i] \
         * params['total_living_space']['{}'.format(2019 + i)]
     r_final, r_carryover_002 = calc_r_d_final(hyperparameter,
                                               dist_buildings,
                                               df_tab_buildings,
                                               r_area_i, bv_r_d,
-                                              current_year,
+                                              current_year, calc_ls,
                                               is_r=True)
-    r_col = 'restauration_area {}'.format(current_year)
+    r_col = 'restauration_area_{}'.format(current_year)
     for (v, idx) in r_final.values():
         df_tab_buildings.loc[idx, r_col] = v
 
     r_deep_amb = params['restoration_deep_amb'][i]
     df_tab_buildings = apply_r_d(df_tab_buildings, r_col, r_deep_amb,
-                                 current_year, is_r=True)
+                                 current_year, calc_ls, is_r=True)
 
     # TODO: this ain't working alright - repair - dead code ahead
     if r_carryover_002 != 0:
@@ -271,7 +306,7 @@ def restauration(params, i, hyperparameter, dist_buildings, bv_r_d,
                 line = df_tab_buildings.loc[idx]
                 if line['building_variant'] == bv_r_d:
                     ls_mio.append(line['living_space_2019'])
-                    cls.append(line['calc_living_space 2020'])
+                    cls.append(line['calc_living_space_2020'])
             r_a = sum(ls_mio) - sum(cls) + r_carryover_002
             print(r_carryover_002)
             print(r_a)
@@ -281,7 +316,7 @@ def restauration(params, i, hyperparameter, dist_buildings, bv_r_d,
                                         dist_buildings,
                                         df_tab_buildings,
                                         r_carryover_002, bv_r,
-                                        current_year,
+                                        current_year, calc_ls,
                                         is_r=True)
             for (v, idx) in r_final.values():
                 df_tab_buildings.loc[idx, r_col] = v
@@ -289,39 +324,33 @@ def restauration(params, i, hyperparameter, dist_buildings, bv_r_d,
 
 
 def demolition(params, i, hyperparameter, dist_buildings, bv_r_d,
-               current_year, df_tab_buildings):
+               current_year, df_tab_buildings, calc_ls):
     # total ls from last year (initially 2019)
     d_area_i = params['demolition_rate'][i] \
-<<<<<<< HEAD
         * params['total_living_space']['{}'.format(2019 + i)]
-    d_final, d_carryover_002 = calc_r_d_final(hyperparameter,
-                                              dist_buildings,
-                                              df_tab_buildings,
-                                              d_area_i, bv_r_d,
-                                              current_year,
-                                              is_r=False)
-    d_col = 'demolition area {}'.format(current_year)
-=======
-        * params['total_living_space']['{}'.format(2019 + i)]  # total ls from last year (initially 2019)
     d_final, _ = calc_r_d_final(hyperparameter,
                                 dist_buildings,
                                 df_tab_buildings,
                                 d_area_i, bv_r_d,
-                                current_year,
+                                current_year, calc_ls,
                                 is_r=False)
-    d_col = 'demolition_area {}'.format(current_year)
->>>>>>> d52ccd4130cfbb4965a3287c99cded22e4804152
+    d_col = 'demolition_area_{}'.format(current_year)
     for (v, idx) in d_final.values():
         df_tab_buildings.loc[idx, d_col] = v
 
     df_tab_buildings = apply_r_d(df_tab_buildings, d_col, None,
-                                 current_year, is_r=False)
+                                 current_year, calc_ls, is_r=False)
     return df_tab_buildings
 
 
-def new_buildings(params, i, hyperparameter, dist_buildings, bv_r_d, current_year, df_tab_buildings):
+def new_buildings(params, i, hyperparameter, dist_buildings, bv_r_d,
+                  current_year, df_tab_buildings, calc_ls):
+ # total ls from last year (initially 2019)
     nb_area_i = params['new_building_rate'][i] \
-        * params['total_living_space']['{}'.format(2019 + i)]  # total ls from last year (initially 2019)
+        * params['total_living_space']['{}'.format(2019 + i)]
+    df_tab_buildings = apply_nb(df_tab_buildings, nb_area_i, i,
+                                params, current_year, calc_ls)
+    return df_tab_buildings
 
 
 def housing_model(df_tabula, df_share_buildings, dist_buildings, params,
@@ -343,18 +372,17 @@ def housing_model(df_tabula, df_share_buildings, dist_buildings, params,
     # start with 2020 until 2060
     for i in range(len(params['years'])):
         current_year = params['years'][i]
+        calc_ls = 'calc_living_space_{}'.format(current_year)
         df_tab_buildings = restauration(params, i, hyperparameter,
                                         dist_buildings, bv_r_d, current_year,
-                                        df_tab_buildings)
+                                        df_tab_buildings, calc_ls)
         df_tab_buildings = demolition(params, i, hyperparameter,
                                       dist_buildings, bv_r_d,
-                                      current_year, df_tab_buildings)
+                                      current_year, df_tab_buildings, calc_ls)
         df_tab_buildings = new_buildings(params, i, hyperparameter,
                                          dist_buildings, bv_r_d,
-                                         current_year, df_tab_buildings)
-
-        print(df_tab_buildings.to_markdown())
-        exit(1)
+                                         current_year, df_tab_buildings, calc_ls)
+        print('processed year {}'.format(current_year))
         # TODO: check if spec_rest_area < wohnfläche - dann so wie bisher
         # else: wenn eine oder nicht alle > wohnfläche: dann umverteilen auf
         # die anderen der unsanierten Gebäude (Gebäudeklassenübergreifend)
@@ -363,9 +391,12 @@ def housing_model(df_tabula, df_share_buildings, dist_buildings, params,
         # a) wir lassens (nicht sanieren)
         # b) das sanierte (in building_variant 002)  wird nochmal saniert
         # (bv 003)
+    df_tab_buildings.to_excel(os.path.join(
+        'output', 'building_stock_dev.xlsx'))
 
 
 def main():
+    # TODO: Change xlsx to ods everywhere - only use open formats
     # load inputs
     il = inputs.InputLoader()
     hyperparameter = il.load_hyperparameter(HYPERPARAMETER)
