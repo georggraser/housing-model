@@ -441,7 +441,7 @@ def housing_model(df_tabula, df_share_buildings, dist_buildings, params,
         'output', 'heat_demand_dev.xlsx'))
     plot_heat_demand(df_heat_demand, params['years'])
     exit(1)
-    # --------------------
+    # ---------------------
     # start with 2020 until 2060
     for i in range(len(params['years'])):
         # TODO: save all unneeded rows to extra table
