@@ -251,7 +251,8 @@ def apply_r_d(df_tab_years, r_d_col, r_deep_amb,
     return df_tab_years
 
 
-def apply_nb(df_tab_years, nb_area_i, i, params, current_year, calc_ls, new_ls):
+def apply_nb(df_tab_years, nb_area_i, i, params, current_year,
+             calc_ls, new_ls):
     nb_sfh_area = params['new_building_share_sfh'][i] * nb_area_i
     nb_th_area = params['new_building_share_th'][i] * nb_area_i
     nb_mfh_area = params['new_building_share_mfh'][i] * nb_area_i
@@ -431,8 +432,10 @@ def housing_model(df_tabula, df_share_buildings, dist_buildings, params,
     df_heat_demand = pd.DataFrame(data={'total_sh_need': -1,
                                         'total_hot_water_need': -1,
                                         'total_heat_need': -1,
-                                        'high_sh_need': -1, 'middle_sh_need': -1,
-                                        'low_sh_need': -1}, index=params['years'])
+                                        'high_sh_need': -1,
+                                        'middle_sh_need': -1,
+                                        'low_sh_need': -1},
+                                  index=params['years'])
     # DELETE ME FOR DEBUGGING PURPOSES --------------------
     df_heat_demand = pd.read_excel(os.path.join(
         'output', 'heat_demand_dev.xlsx'))
@@ -461,11 +464,14 @@ def housing_model(df_tabula, df_share_buildings, dist_buildings, params,
                                      calc_ls, new_ls)
         print('processed year {}'.format(current_year))
 
-        df_tab_years, df_heat_demand = heating_demand(df_tab_years, df_heat_demand, space_heat_need,
-                                                      hot_water_need, new_ls, current_year)
+        df_tab_years, df_heat_demand = heating_demand(df_tab_years,
+                                                      df_heat_demand,
+                                                      space_heat_need,
+                                                      hot_water_need,
+                                                      new_ls, current_year)
     df_heat_demand.to_excel(os.path.join(
         'output', 'heat_demand_dev.xlsx'))
-    plot_heat_demand(df_heat_demand)
+    plot_heat_demand(df_heat_demand, params['years'])
     # TODO: check if spec_rest_area < wohnfläche - dann so wie bisher
     # else: wenn eine oder nicht alle > wohnfläche: dann umverteilen auf
     # die anderen der unsanierten Gebäude (Gebäudeklassenübergreifend)
