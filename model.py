@@ -7,7 +7,8 @@
 
 import inputs
 import os
-# import pandas as pd
+import pandas as pd
+import matplotlib.pyplot as plt
 
 # GLOBALS
 
@@ -51,14 +52,14 @@ HYPERPARAMETER = os.path.join('input', 'hyperparameter.xlsx')
 # METHODS
 
 
-def calc_dist(df_tab_buildings, bc, bv_r_d, current_year, is_r, calc_ls):
+def calc_dist(df_tab_years, bc, bv_r_d, current_year, is_r, calc_ls):
     # get percentage - distribution of house-types
     # in the different house classes (z.B. A: MFH-50%, EFH-20%, ...)
     # write total areas in dist ({A: ls_, B: ls_ ...})
     dist = {x: 0 for x in bc}
     # TODO: eliminate need for df_unrest
-    for x in range(len(df_tab_buildings)):
-        line = df_tab_buildings.iloc[x]
+    for x in range(len(df_tab_years)):
+        line = df_tab_years.iloc[x]
         if line['building_variant'] == bv_r_d:
             a_to_l = line['building_code'].split('_')[-1]
             if is_r:
@@ -70,17 +71,17 @@ def calc_dist(df_tab_buildings, bc, bv_r_d, current_year, is_r, calc_ls):
     return dist
 
 
-def calc_r_ic(df_tab_buildings, hyperparameter, dist_buildings,
+def calc_r_ic(df_tab_years, hyperparameter, dist_buildings,
               r_d_area_i, bv_r_d, current_year, is_r, calc_ls):
     # EFH_A --> A, MFH_A --> A, ...
     # TODO: add in test: check if building code is in ['A', 'B', ..., 'L']
     bc = list(set([x.split('_')[-1]
-                   for x in df_tab_buildings['building_code']]))
-    dist = calc_dist(df_tab_buildings, bc, bv_r_d, current_year, is_r, calc_ls)
+                   for x in df_tab_years['building_code']]))
+    dist = calc_dist(df_tab_years, bc, bv_r_d, current_year, is_r, calc_ls)
 
     r_d_ic = {}   # EFH_A: [value, idx]
-    for idx in range(len(df_tab_buildings)):
-        line = df_tab_buildings.iloc[idx]
+    for idx in range(len(df_tab_years)):
+        line = df_tab_years.iloc[idx]
         if line['building_variant'] == bv_r_d:
             a_to_l = line['building_code'].split('_')[-1]
             if is_r:
@@ -103,22 +104,22 @@ def calc_r_ic(df_tab_buildings, hyperparameter, dist_buildings,
     return r_d_ic
 
 
-def check_r_d(r_d_ic, r_d_rem, r_d_final, df_tab_buildings,
+def check_r_d(r_d_ic, r_d_rem, r_d_final, df_tab_years,
               current_year, is_r, calc_ls):
     """
     short description
-    Params: 
+    Params:
         r_d_ic: dict, {EFH_A: [new_living_space, idx]}
 
-    Returns: 
+    Returns:
     """
     r_d_rem_check = False
     for lbc, [v, idx] in r_d_ic.items():
         if is_r:
-            ls_mio = df_tab_buildings.at[idx, 'living_space_{}'.format(
+            ls_mio = df_tab_years.at[idx, 'living_space_{}'.format(
                 current_year-1)]
         else:
-            ls_mio = df_tab_buildings.at[idx, calc_ls]
+            ls_mio = df_tab_years.at[idx, calc_ls]
         if v < ls_mio:
             r_d_final[lbc] = [v, idx]
             r_d_rem[lbc] = [1, 0]
@@ -132,17 +133,17 @@ def check_r_d(r_d_ic, r_d_rem, r_d_final, df_tab_buildings,
     return r_d_rem_check, r_d_final, r_d_rem
 
 
-def calc_r_d_final(hyperparameter, dist_buildings, df_tab_buildings,
+def calc_r_d_final(hyperparameter, dist_buildings, df_tab_years,
                    r_d_area_i, bv_r_d, current_year, calc_ls, is_r):
     # EFH_A: [1, 0] <-- rest space available (1), nothing to redistribute
     # EFH_A: [0, 0.123] <-- rest space full (0), 0.123 to redistribute
     r_d_rem = {}  # restoration remaining
     r_d_final = {}  # EFH_A: (rest, idx) restoration
     r_carryover_002 = 0   # sum of restauration that can't be distributed
-    r_d_ic = calc_r_ic(df_tab_buildings, hyperparameter, dist_buildings,
+    r_d_ic = calc_r_ic(df_tab_years, hyperparameter, dist_buildings,
                        r_d_area_i, bv_r_d, current_year, is_r, calc_ls)
     r_d_rem_check, r_d_final, r_d_rem = check_r_d(r_d_ic, r_d_rem, r_d_final,
-                                                  df_tab_buildings,
+                                                  df_tab_years,
                                                   current_year, is_r, calc_ls)
 
     # sum of restauration/demolition area
@@ -186,7 +187,7 @@ def calc_r_d_final(hyperparameter, dist_buildings, df_tab_buildings,
 
             r_d_rem_check, r_d_final, r_d_rem = check_r_d(r_d_ic, r_d_rem,
                                                           r_d_final,
-                                                          df_tab_buildings,
+                                                          df_tab_years,
                                                           current_year, is_r,
                                                           calc_ls)
 
@@ -217,93 +218,92 @@ def calc_r_d_final(hyperparameter, dist_buildings, df_tab_buildings,
         return r_d_final, r_carryover_002
 
 
-def apply_r_d(df_tab_buildings, r_d_col, r_deep_amb,
+def apply_r_d(df_tab_years, r_d_col, r_deep_amb,
               current_year, calc_ls, is_r):
-    bc_all = list(set(df_tab_buildings['building_code']))
+    bc_all = list(set(df_tab_years['building_code']))
     # iterate through all building codes and apply the restauration
     for x in bc_all:
         ls_sub_1 = 0
         ls_add_2 = 0
         ls_add_3 = 0
         # only take the indizes of the masked dataframe and use them
-        # for the df_tab_buildings to know where the line is
-        mask = df_tab_buildings['building_code'] == x
-        df_masked = df_tab_buildings[mask]
+        # for the df_tab_years to know where the line is
+        mask = df_tab_years['building_code'] == x
+        df_masked = df_tab_years[mask]
         for y in df_masked.index:
-            line = df_tab_buildings.iloc[y]
+            line = df_tab_years.iloc[y]
             if is_r:
                 ls_mio = line['living_space_{}'.format(current_year-1)]
             else:
                 ls_mio = line[calc_ls]
             if line['building_variant'] == '001':
                 ls_sub_1 = ls_mio - line[r_d_col]
-                df_tab_buildings.loc[y, calc_ls] = ls_sub_1
+                df_tab_years.loc[y, calc_ls] = ls_sub_1
                 if is_r:
                     ls_add_2 = (1 - r_deep_amb) * line[r_d_col]
                     ls_add_3 = r_deep_amb * line[r_d_col]
             elif line['building_variant'] == '002' and is_r:
                 ls_add_2 += ls_mio
-                df_tab_buildings.loc[y, calc_ls] = ls_add_2
+                df_tab_years.loc[y, calc_ls] = ls_add_2
             elif line['building_variant'] == '003' and is_r:
                 ls_add_3 += ls_mio
-                df_tab_buildings.loc[y, calc_ls] = ls_add_3
-    return df_tab_buildings
+                df_tab_years.loc[y, calc_ls] = ls_add_3
+    return df_tab_years
 
 
-def apply_nb(df_tab_buildings, nb_area_i, i, params, current_year, calc_ls):
+def apply_nb(df_tab_years, nb_area_i, i, params, current_year, calc_ls, new_ls):
     nb_sfh_area = params['new_building_share_sfh'][i] * nb_area_i
     nb_th_area = params['new_building_share_th'][i] * nb_area_i
     nb_mfh_area = params['new_building_share_mfh'][i] * nb_area_i
     nb_amb = params['new_building_deep_amb'][i]
     nb_col = 'new_building_area_{}'.format(current_year)
 
-    def set_values(line, bc, area, nb_amb, df_tab_buildings, idx):
+    def set_values(line, bc, area, nb_amb, df_tab_years, idx):
         if line['building_code'] == bc and line['building_variant'] == '002':
-            df_tab_buildings.loc[idx, nb_col] = area * (1-nb_amb)
+            df_tab_years.loc[idx, nb_col] = area * (1-nb_amb)
         elif line['building_code'] == bc and line['building_variant'] == '003':
-            df_tab_buildings.loc[idx, nb_col] = area * nb_amb
-        return df_tab_buildings
-    for idx in range(len(df_tab_buildings)):
-        line = df_tab_buildings.iloc[idx]
-        df_tab_buildings.loc[idx, nb_col] = 0
-        df_tab_buildings = set_values(
-            line, 'EFH_L', nb_sfh_area, nb_amb, df_tab_buildings, idx)
-        df_tab_buildings = set_values(
-            line, 'MFH_L', nb_th_area, nb_amb, df_tab_buildings, idx)
-        df_tab_buildings = set_values(
-            line, 'RH_L', nb_mfh_area, nb_amb, df_tab_buildings, idx)
+            df_tab_years.loc[idx, nb_col] = area * nb_amb
+        return df_tab_years
+    for idx in range(len(df_tab_years)):
+        line = df_tab_years.iloc[idx]
+        df_tab_years.loc[idx, nb_col] = 0
+        df_tab_years = set_values(
+            line, 'EFH_L', nb_sfh_area, nb_amb, df_tab_years, idx)
+        df_tab_years = set_values(
+            line, 'MFH_L', nb_th_area, nb_amb, df_tab_years, idx)
+        df_tab_years = set_values(
+            line, 'RH_L', nb_mfh_area, nb_amb, df_tab_years, idx)
 
-    df_tab_buildings.loc[:, 'living_space_{}'.format(current_year)] = \
-        df_tab_buildings[calc_ls] + df_tab_buildings[nb_col]
-    return df_tab_buildings
+    df_tab_years.loc[:, new_ls] = df_tab_years[calc_ls] + df_tab_years[nb_col]
+    return df_tab_years
 
 
 def restauration(params, i, hyperparameter, dist_buildings, bv_r_d,
-                 current_year, df_tab_buildings, calc_ls):
+                 current_year, df_tab_years, calc_ls):
     # restoration calculation begins
     r_area_i = params['restoration_rate'][i] \
         * params['total_living_space']['{}'.format(2019 + i)]
     r_final, r_carryover_002 = calc_r_d_final(hyperparameter,
                                               dist_buildings,
-                                              df_tab_buildings,
+                                              df_tab_years,
                                               r_area_i, bv_r_d,
                                               current_year, calc_ls,
                                               is_r=True)
     r_col = 'restauration_area_{}'.format(current_year)
     for (v, idx) in r_final.values():
-        df_tab_buildings.loc[idx, r_col] = v
+        df_tab_years.loc[idx, r_col] = v
 
     r_deep_amb = params['restoration_deep_amb'][i]
-    df_tab_buildings = apply_r_d(df_tab_buildings, r_col, r_deep_amb,
-                                 current_year, calc_ls, is_r=True)
+    df_tab_years = apply_r_d(df_tab_years, r_col, r_deep_amb,
+                             current_year, calc_ls, is_r=True)
 
     # TODO: this ain't working alright - repair - dead code ahead
     if r_carryover_002 != 0:
         if hyperparameter['second_amb_restauration'] == 'yes':
             ls_mio = []
             cls = []
-            for idx in range(len(df_tab_buildings)):
-                line = df_tab_buildings.loc[idx]
+            for idx in range(len(df_tab_years)):
+                line = df_tab_years.loc[idx]
                 if line['building_variant'] == bv_r_d:
                     ls_mio.append(line['living_space_2019'])
                     cls.append(line['calc_living_space_2020'])
@@ -314,43 +314,102 @@ def restauration(params, i, hyperparameter, dist_buildings, bv_r_d,
             bv_r = '002'
             r_final, _ = calc_r_d_final(hyperparameter,
                                         dist_buildings,
-                                        df_tab_buildings,
+                                        df_tab_years,
                                         r_carryover_002, bv_r,
                                         current_year, calc_ls,
                                         is_r=True)
             for (v, idx) in r_final.values():
-                df_tab_buildings.loc[idx, r_col] = v
-    return df_tab_buildings
+                df_tab_years.loc[idx, r_col] = v
+    return df_tab_years
 
 
 def demolition(params, i, hyperparameter, dist_buildings, bv_r_d,
-               current_year, df_tab_buildings, calc_ls):
+               current_year, df_tab_years, calc_ls):
     # total ls from last year (initially 2019)
     d_area_i = params['demolition_rate'][i] \
         * params['total_living_space']['{}'.format(2019 + i)]
     d_final, _ = calc_r_d_final(hyperparameter,
                                 dist_buildings,
-                                df_tab_buildings,
+                                df_tab_years,
                                 d_area_i, bv_r_d,
                                 current_year, calc_ls,
                                 is_r=False)
     d_col = 'demolition_area_{}'.format(current_year)
     for (v, idx) in d_final.values():
-        df_tab_buildings.loc[idx, d_col] = v
+        df_tab_years.loc[idx, d_col] = v
 
-    df_tab_buildings = apply_r_d(df_tab_buildings, d_col, None,
-                                 current_year, calc_ls, is_r=False)
-    return df_tab_buildings
+    df_tab_years = apply_r_d(df_tab_years, d_col, None,
+                             current_year, calc_ls, is_r=False)
+    return df_tab_years
 
 
 def new_buildings(params, i, hyperparameter, dist_buildings, bv_r_d,
-                  current_year, df_tab_buildings, calc_ls):
- # total ls from last year (initially 2019)
+                  current_year, df_tab_years, calc_ls, new_ls):
+    # total ls from last year (initially 2019)
     nb_area_i = params['new_building_rate'][i] \
         * params['total_living_space']['{}'.format(2019 + i)]
-    df_tab_buildings = apply_nb(df_tab_buildings, nb_area_i, i,
-                                params, current_year, calc_ls)
-    return df_tab_buildings
+    df_tab_years = apply_nb(df_tab_years, nb_area_i, i,
+                            params, current_year, calc_ls, new_ls)
+    return df_tab_years
+
+
+def heating_demand(df_tab_years, df_heat_demand, space_heat_need,
+                   hot_water_need, new_ls, current_year):
+    high_sh_need = []
+    middle_sh_need = []
+    low_sh_need = []
+    for idx in range(len(df_tab_years)):
+        line = df_tab_years.iloc[idx]
+        spec_sh_need = line['space_heat_need']
+        hot_water = line['hot_water_need']
+        ls = line[new_ls]
+        sh_need = spec_sh_need * ls
+        df_tab_years.loc[idx, space_heat_need] = sh_need
+        df_tab_years.loc[idx, hot_water_need] = hot_water * ls
+        if spec_sh_need >= 120:
+            high_sh_need.append(sh_need)
+        elif spec_sh_need < 120 and spec_sh_need >= 90:
+            middle_sh_need.append(sh_need)
+        elif spec_sh_need < 90:
+            low_sh_need.append(sh_need)
+    # total sum
+    df_heat_demand.loc[current_year, 'total_sh_need'] = sum(
+        df_tab_years[space_heat_need])
+    df_heat_demand.loc[current_year, 'total_hot_water_need'] = sum(
+        df_tab_years[hot_water_need])
+    df_heat_demand.loc[current_year, 'total_heat_need'] =  \
+        df_heat_demand.loc[current_year, 'total_sh_need'] + \
+        df_heat_demand.loc[current_year, 'total_hot_water_need']
+    # sum (>=120)
+    df_heat_demand.loc[current_year, 'high_sh_need'] = sum(high_sh_need)
+    # sum (<120 >=90)
+    df_heat_demand.loc[current_year, 'middle_sh_need'] = sum(middle_sh_need)
+    # sum (<90)
+    df_heat_demand.loc[current_year, 'low_sh_need'] = sum(low_sh_need)
+
+    return df_tab_years, df_heat_demand
+
+
+def plot_heat_demand(df_heat_demand, years):
+    total_sh_need = df_heat_demand['total_sh_need']
+    total_hot_water_need = df_heat_demand['total_hot_water_need']
+    total_heat_need = df_heat_demand['total_heat_need']
+    high_sh_need = df_heat_demand['high_sh_need']
+    middle_sh_need = df_heat_demand['middle_sh_need']
+    low_sh_need = df_heat_demand['low_sh_need']
+
+    # Plot x-labels, y-label and data
+    plt.plot([], [], color='blue', label='low_sh_need')
+    plt.plot([], [], color='orange', label='middle_sh_need')
+    plt.plot([], [], color='brown', label='high_sh_need')
+
+    plt.stackplot(years, low_sh_need, middle_sh_need, high_sh_need,
+                  baseline='zero', colors=['blue', 'orange', 'brown'])
+    plt.legend()
+    plt.title('Heat demand comparison')
+    plt.xlabel('years')
+    plt.ylabel('space heat need in kwh')
+    plt.show()
 
 
 def housing_model(df_tabula, df_share_buildings, dist_buildings, params,
@@ -360,39 +419,64 @@ def housing_model(df_tabula, df_share_buildings, dist_buildings, params,
 
     df_share_buildings = df_share_buildings.loc[
         df_share_buildings['living_space_2019'] > 0]
-    df_tab_buildings = df_tabula.merge(df_share_buildings,
-                                       left_on='identifier',
-                                       right_on='tabula_code')
+    df_tab_years = df_tabula.merge(df_share_buildings,
+                                   left_on='identifier',
+                                   right_on='tabula_code')
     # only use the columns we need
-    df_tb_keys = ['building_type', 'building_code', 'building_variant',
-                  'living_space_2019']
-    df_tab_buildings = df_tab_buildings[df_tb_keys]
+    #  df_tb_keys = ['building_type', 'building_code', 'building_variant',
+    #              'living_space_2019']
+    #  df_tab_years = df_tab_years[df_tb_keys]
     bv_r_d = '001'  # building_variant_restauration and demolition
     # TODO: add in test: check for doublettes in tabula_code
+    df_heat_demand = pd.DataFrame(data={'total_sh_need': -1,
+                                        'total_hot_water_need': -1,
+                                        'total_heat_need': -1,
+                                        'high_sh_need': -1, 'middle_sh_need': -1,
+                                        'low_sh_need': -1}, index=params['years'])
+    # DELETE ME FOR DEBUGGING PURPOSES --------------------
+    df_heat_demand = pd.read_excel(os.path.join(
+        'output', 'heat_demand_dev.xlsx'))
+    plot_heat_demand(df_heat_demand, params['years'])
+    exit(1)
+    # --------------------
     # start with 2020 until 2060
     for i in range(len(params['years'])):
+        # TODO: save all unneeded rows to extra table
+        # TODO: define all new columns here and only here!
         current_year = params['years'][i]
         calc_ls = 'calc_living_space_{}'.format(current_year)
-        df_tab_buildings = restauration(params, i, hyperparameter,
-                                        dist_buildings, bv_r_d, current_year,
-                                        df_tab_buildings, calc_ls)
-        df_tab_buildings = demolition(params, i, hyperparameter,
-                                      dist_buildings, bv_r_d,
-                                      current_year, df_tab_buildings, calc_ls)
-        df_tab_buildings = new_buildings(params, i, hyperparameter,
-                                         dist_buildings, bv_r_d,
-                                         current_year, df_tab_buildings, calc_ls)
+        new_ls = 'living_space_{}'.format(current_year)
+        space_heat_need = 'space_heat_need_{}'.format(current_year)
+        hot_water_need = 'hot_water_need_{}'.format(current_year)
+
+        df_tab_years = restauration(params, i, hyperparameter,
+                                    dist_buildings, bv_r_d, current_year,
+                                    df_tab_years, calc_ls)
+        df_tab_years = demolition(params, i, hyperparameter,
+                                  dist_buildings, bv_r_d,
+                                  current_year, df_tab_years, calc_ls)
+        df_tab_years = new_buildings(params, i, hyperparameter,
+                                     dist_buildings, bv_r_d,
+                                     current_year, df_tab_years,
+                                     calc_ls, new_ls)
         print('processed year {}'.format(current_year))
-        # TODO: check if spec_rest_area < wohnfläche - dann so wie bisher
-        # else: wenn eine oder nicht alle > wohnfläche: dann umverteilen auf
-        # die anderen der unsanierten Gebäude (Gebäudeklassenübergreifend)
-        # Umverteilung: Bei welchen ist noch Platz?
-        # else: wenn es bei allen nicht klappt: 2 Möglichkeiten
-        # a) wir lassens (nicht sanieren)
-        # b) das sanierte (in building_variant 002)  wird nochmal saniert
-        # (bv 003)
-    df_tab_buildings.to_excel(os.path.join(
-        'output', 'building_stock_dev.xlsx'))
+
+        df_tab_years, df_heat_demand = heating_demand(df_tab_years, df_heat_demand, space_heat_need,
+                                                      hot_water_need, new_ls, current_year)
+    df_heat_demand.to_excel(os.path.join(
+        'output', 'heat_demand_dev.xlsx'))
+    plot_heat_demand(df_heat_demand)
+    # TODO: check if spec_rest_area < wohnfläche - dann so wie bisher
+    # else: wenn eine oder nicht alle > wohnfläche: dann umverteilen auf
+    # die anderen der unsanierten Gebäude (Gebäudeklassenübergreifend)
+    # Umverteilung: Bei welchen ist noch Platz?
+    # else: wenn es bei allen nicht klappt: 2 Möglichkeiten
+    # a) wir lassens (nicht sanieren)
+    # b) das sanierte (in building_variant 002)  wird nochmal saniert
+    # (bv 003)
+    #  df_tab_years.to_excel(os.path.join(
+    #    'output', 'building_stock_dev.xlsx'))
+    return df_tab_years
 
 
 def main():
@@ -420,8 +504,8 @@ def main():
         bev_var = hyperparameter['bev_variant']
         bev = dem_dev[bev_var]
         params = rc.rates(total_living_space_2019, bev, scen_params[scen])
-        housing_model(df_tabula, df_share_buildings,
-                      dist_buildings, params, hyperparameter)
+        df_tab_years = housing_model(df_tabula, df_share_buildings,
+                                     dist_buildings, params, hyperparameter)
 
 
 if __name__ == '__main__':
