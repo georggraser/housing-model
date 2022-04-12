@@ -379,7 +379,7 @@ def heating_demand(df_tab_years, df_heat_demand, space_heat_need,
     df_heat_demand.loc[current_year, 'low_sh_need'] = sum(low_sh_need)
     # new buildings L sh need
     for bv_idx in range(3):
-        bv_L =
+        bv_L = 0
         df_heat_demand.loc[current_year, f'L_{bv_idx}_sh_need'] = bv_L
     return df_tab_years, df_heat_demand
 
@@ -438,11 +438,14 @@ def housing_model(df_tabula, df_share_buildings, dist_buildings, params,
     heat_demand_data = ['total_sh_need', 'total_hot_water_need',
                         'total_heat_need', 'high_sh_need', 'middle_sh_need',
                         'low_sh_need']
+    for bt in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L']:
+        heat_demand_data += [f'{bt}_sh_need']
     for bv_idx in range(1, 4):
         for bt in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L']:
             heat_demand_data += [f'{bt}_{bv_idx}_sh_need']
         heat_demand_data += [f'EFH_{bv_idx}_sh_need', f'MFH_{bv_idx}_sh_need',
                              f'RH_{bv_idx}_sh_need', f'GMH_{bv_idx}_sh_need']
+
     df_heat_demand = pd.DataFrame(data={hd: -1
                                         for hd in heat_demand_data},
                                   index=params['years'])
