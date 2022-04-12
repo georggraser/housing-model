@@ -400,7 +400,7 @@ def plot_heat_demand(df_heat_demand, years):
     plt.legend()
     plt.title('Heat demand comparison')
     plt.xlabel('years')
-    plt.ylabel('space heat need in kwh')
+    plt.ylabel('space heat need in  kwh')
     plt.show()
 
 
