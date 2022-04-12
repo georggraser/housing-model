@@ -387,12 +387,12 @@ def heating_demand(df_tab_years, df_heat_demand, space_heat_need,
                 for var_idx in ['001', '002', '003']:
                     var_i = variant.loc[variant['building_variant'] == var_idx]
                     sh_var_i = var_i['space_heat_need'] * var_i[new_ls]
-                    print(sh_var_i)
                     # TODO: remove the sum here and make valid typecast from df.Series to float
                     df_heat_demand.loc[current_year,
                                        f'{build}_{var_idx}_sh_need'] = sum(sh_var_i)
                     sh_var.append(sum(sh_var_i))
-                df_heat_demand.loc[current_year, f'{ch}_sh_need'] = sum(sh_var)
+                df_heat_demand.loc[current_year,
+                                   f'{build}_sh_need'] = sum(sh_var)
     return df_tab_years, df_heat_demand
 
 
@@ -424,6 +424,24 @@ def plot_heat_demand(df_heat_demand, years):
     # unterteilt in Building Variant 1,2 und 3
     plt.figure(2)
     plt.xlabel('years')
+    to_stack = []
+    for ch in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L']:
+        for var_idx in ['001', '002', '003']:
+            if ch != 'K' and ch != 'L' and ch != 'A':
+                to_stack.append(df_heat_demand[f'EFH_{ch}_{var_idx}_sh_need'] +
+                                df_heat_demand[f'MFH_{ch}_{var_idx}_sh_need'] +
+                                df_heat_demand[f'RH_{ch}_{var_idx}_sh_need'] +
+                                df_heat_demand[f'GMH_{ch}_{var_idx}_sh_need'])
+            elif ch == 'K' and ch == 'L':
+                to_stack.append(df_heat_demand[f'EFH_{ch}_{var_idx}_sh_need'] +
+                                df_heat_demand[f'MFH_{ch}_{var_idx}_sh_need'] +
+                                df_heat_demand[f'RH_{ch}_{var_idx}_sh_need'])
+            elif ch == 'A':
+                to_stack.append(df_heat_demand[f'EFH_{ch}_{var_idx}_sh_need'] +
+                                df_heat_demand[f'MFH_{ch}_{var_idx}_sh_need'])
+    plt.stackplot(years, to_stack, baseline='zero')
+    plt.show()
+
     # Plot 2: Wärmebedarf nach EFH, RH, MFH und Ab
 
     # Plot 3: Quadratmeter der unterschiedlichen Gebäude /
