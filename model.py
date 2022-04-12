@@ -378,9 +378,21 @@ def heating_demand(df_tab_years, df_heat_demand, space_heat_need,
     # sum (<90)
     df_heat_demand.loc[current_year, 'low_sh_need'] = sum(low_sh_need)
     # new buildings L sh need
-    for bv_idx in range(3):
-        bv_L = 0
-        df_heat_demand.loc[current_year, f'L_{bv_idx}_sh_need'] = bv_L
+    for ch in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L']:
+        building_list = [f'EFH_{ch}', f'MFH_{ch}', f'RH_{ch}', f'GMH_{ch}']
+        for build in building_list:
+            variant = df_tab_years.loc[df_tab_years['building_code'] == build]
+            if not variant.empty:
+                sh_var = []
+                for var_idx in ['001', '002', '003']:
+                    var_i = variant.loc[variant['building_variant'] == var_idx]
+                    sh_var_i = var_i['space_heat_need'] * var_i[new_ls]
+                    print(sh_var_i)
+                    # TODO: remove the sum here and make valid typecast from df.Series to float
+                    df_heat_demand.loc[current_year,
+                                       f'{build}_{var_idx}_sh_need'] = sum(sh_var_i)
+                    sh_var.append(sum(sh_var_i))
+                df_heat_demand.loc[current_year, f'{ch}_sh_need'] = sum(sh_var)
     return df_tab_years, df_heat_demand
 
 
@@ -392,6 +404,7 @@ def plot_heat_demand(df_heat_demand, years):
     middle_sh_need = df_heat_demand['middle_sh_need']
     low_sh_need = df_heat_demand['low_sh_need']
 
+    plt.figure(1)
     # Plot x-labels, y-label and data
     plt.plot([], [], color='blue', label='low_sh_need')
     plt.plot([], [], color='orange', label='middle_sh_need')
@@ -409,7 +422,8 @@ def plot_heat_demand(df_heat_demand, years):
     #   Wärmebedarf
     #    1. fÜr L und K  und Summe von A bis J den Wärmebedarf für all), und alle anderen Gebäude /
     # unterteilt in Building Variant 1,2 und 3
-
+    plt.figure(2)
+    plt.xlabel('years')
     # Plot 2: Wärmebedarf nach EFH, RH, MFH und Ab
 
     # Plot 3: Quadratmeter der unterschiedlichen Gebäude /
@@ -435,25 +449,13 @@ def housing_model(df_tabula, df_share_buildings, dist_buildings, params,
     #  df_tab_years = df_tab_years[df_tb_keys]
     bv_r_d = '001'  # building_variant_restauration and demolition
     # TODO: add in test: check for doublettes in tabula_code
-    heat_demand_data = ['total_sh_need', 'total_hot_water_need',
-                        'total_heat_need', 'high_sh_need', 'middle_sh_need',
-                        'low_sh_need']
-    for bt in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L']:
-        heat_demand_data += [f'{bt}_sh_need']
-    for bv_idx in range(1, 4):
-        for bt in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L']:
-            heat_demand_data += [f'{bt}_{bv_idx}_sh_need']
-        heat_demand_data += [f'EFH_{bv_idx}_sh_need', f'MFH_{bv_idx}_sh_need',
-                             f'RH_{bv_idx}_sh_need', f'GMH_{bv_idx}_sh_need']
 
-    df_heat_demand = pd.DataFrame(data={hd: -1
-                                        for hd in heat_demand_data},
-                                  index=params['years'])
+    df_heat_demand = pd.DataFrame(data={}, index=params['years'])
     # DELETE ME FOR DEBUGGING PURPOSES --------------------
-    #  df_heat_demand = pd.read_excel(os.path.join(
-    #    'output', 'heat_demand_dev.xlsx'))
-    #  plot_heat_demand(df_heat_demand, params['years'])
-    #  exit(1)
+    df_heat_demand = pd.read_excel(os.path.join(
+        'output', 'heat_demand_dev.xlsx'))
+    plot_heat_demand(df_heat_demand, params['years'])
+    exit(1)
     # ---------------------
     # start with 2020 until 2060
     for i in range(len(params['years'])):
@@ -484,8 +486,7 @@ def housing_model(df_tabula, df_share_buildings, dist_buildings, params,
                                                       space_heat_need,
                                                       hot_water_need,
                                                       new_ls, current_year)
-    df_heat_demand.to_excel(os.path.join(
-        'output', 'heat_demand_dev.xlsx'))
+    df_heat_demand.to_excel(os.path.join('output', 'heat_demand_dev.xlsx'))
     plot_heat_demand(df_heat_demand, params['years'])
     # TODO: check if spec_rest_area < wohnfläche - dann so wie bisher
     # else: wenn eine oder nicht alle > wohnfläche: dann umverteilen auf
