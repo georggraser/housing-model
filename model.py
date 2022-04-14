@@ -57,7 +57,6 @@ def calc_dist(df_tab_years, bc, bv_r_d, current_year, is_r, calc_ls):
     # in the different house classes (z.B. A: MFH-50%, EFH-20%, ...)
     # write total areas in dist ({A: ls_, B: ls_ ...})
     dist = {x: 0 for x in bc}
-    # TODO: eliminate need for df_unrest
     for x in range(len(df_tab_years)):
         line = df_tab_years.iloc[x]
         if line['building_variant'] == bv_r_d:
@@ -325,16 +324,20 @@ def new_buildings(params, i, df_tab_years, calc_ls, new_ls, nb_col):
     nb_mfh_area = params['new_building_share_mfh'][i] * nb_area_i
     nb_amb = params['new_building_deep_amb'][i]
 
-    df_tab_years.loc[:, nb_col] = 0
+    df_col = pd.DataFrame({nb_col: [0 for _ in range(len(df_tab_years))]})
     bcs = ['EFH_L', 'MFH_L', 'RH_L']
     areas = [nb_sfh_area, nb_mfh_area, nb_th_area]
     for bc, area in zip(bcs, areas):
         bc_map = df_tab_years['building_code'] == bc
-        nb_L_map_002 = bc_map & (df_tab_years['building_variant'] == '002')
-        df_tab_years[nb_col].loc[nb_L_map_002] = area * (1-nb_amb)
+        bv_002 = df_tab_years['building_variant'] == '002'
+        bv_003 = df_tab_years['building_variant'] == '003'
 
-        nb_L_map_003 = bc_map & (df_tab_years['building_variant'] == '003')
-        df_tab_years[nb_col].loc[nb_L_map_003] = area * nb_amb
+        nb_L_map_002 = bc_map & bv_002
+        df_col[nb_col].loc[nb_L_map_002] = area * (1-nb_amb)
+
+        nb_L_map_003 = bc_map & bv_003
+        df_col[nb_col].loc[nb_L_map_003] = area * nb_amb
+    df_tab_years.loc[:, nb_col] = df_col
     df_tab_years.loc[:, new_ls] = df_tab_years[calc_ls] + df_tab_years[nb_col]
     return df_tab_years
 
@@ -342,20 +345,19 @@ def new_buildings(params, i, df_tab_years, calc_ls, new_ls, nb_col):
 def heating_demand(df_tab_years, df_heat_demand, space_heat_need,
                    hot_water_need, new_ls, current_year):
     high_map = df_tab_years['space_heat_need'] >= 120
-    # middle_tmp = df_tab_years['space_heat_need'] < 120
-    middle_map = (df_tab_years['space_heat_need'] >= 90) & \
+    middle_map = (df_tab_years['space_heat_need'] >= 90) &\
         (df_tab_years['space_heat_need'] < 120)
     low_map = df_tab_years['space_heat_need'] < 90
 
     def get_sh_need(map):
-        return df_tab_years['space_heat_need'].loc[map] * \
+        return df_tab_years['space_heat_need'].loc[map] *\
             df_tab_years[new_ls].loc[map]
     high_sh_need = get_sh_need(high_map)
     middle_sh_need = get_sh_need(middle_map)
     low_sh_need = get_sh_need(low_map)
-    df_tab_years.loc[:, space_heat_need] = df_tab_years['space_heat_need'] * \
+    df_tab_years.loc[:, space_heat_need] = df_tab_years['space_heat_need'] *\
         df_tab_years[new_ls]
-    df_tab_years.loc[:, hot_water_need] = df_tab_years['hot_water_need'] * \
+    df_tab_years.loc[:, hot_water_need] = df_tab_years['hot_water_need'] *\
         df_tab_years[new_ls]
 
     # total sum
@@ -372,8 +374,10 @@ def heating_demand(df_tab_years, df_heat_demand, space_heat_need,
     df_heat_demand.loc[current_year, 'middle_sh_need'] = sum(middle_sh_need)
     # sum (<90)
     df_heat_demand.loc[current_year, 'low_sh_need'] = sum(low_sh_need)
-    # new buildings sh need
 
+    # new buildings sh need
+    all_inserts_rows = []
+    all_inserts_cols = []
     for ch in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L']:
         building_list = [f'EFH_{ch}', f'MFH_{ch}', f'RH_{ch}', f'GMH_{ch}']
         for bc in building_list:
@@ -383,11 +387,17 @@ def heating_demand(df_tab_years, df_heat_demand, space_heat_need,
                     (df_tab_years['building_variant'] == bv)
                 spec_sh_need = get_sh_need(spec_map).to_numpy()
                 if spec_sh_need.size > 0:
-                    df_heat_demand.loc[current_year,
-                                       f'{bc}_{bv}_sh_need'] = spec_sh_need
+                    all_inserts_cols.append(f'{bc}_{bv}_sh_need')
+                    all_inserts_rows.append(spec_sh_need)
                     spec_sh_need_all.append(spec_sh_need)
-            df_heat_demand.loc[current_year,
-                               f'{bc}_sh_need'] = sum(spec_sh_need_all)
+            all_inserts_cols.append(f'{bc}_sh_need')
+            all_inserts_rows.append(sum(spec_sh_need_all))
+    df_heat_demand.loc[current_year, all_inserts_cols] = all_inserts_rows
+    # for k, v in all_inserts.items():
+    #    df_heat_demand.loc[current_year, k] = v
+    #df = pd.DataFrame.from_dict(data=all_inserts, orient='columns')
+    #df = df.rename(index={0: current_year})
+    #df_heat_demand = df_heat_demand.append(all_inserts, ignore_index=True)
     return df_tab_years, df_heat_demand
 
 
