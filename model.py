@@ -316,8 +316,7 @@ def demolition(params, i, hyperparameter, dist_buildings, bv_r_d,
     return df_tab_years
 
 
-def new_buildings(params, i, hyperparameter, dist_buildings, bv_r_d,
-                  df_tab_years, calc_ls, new_ls, nb_col):
+def new_buildings(params, i, df_tab_years, calc_ls, new_ls, nb_col):
     # total ls from last year (initially 2019)
     nb_area_i = params['new_building_rate'][i] \
         * params['total_living_space']['{}'.format(2019 + i)]
@@ -326,21 +325,16 @@ def new_buildings(params, i, hyperparameter, dist_buildings, bv_r_d,
     nb_mfh_area = params['new_building_share_mfh'][i] * nb_area_i
     nb_amb = params['new_building_deep_amb'][i]
 
-    def set_values(line, bc, area, nb_amb, df_tab_years, idx):
-        if line['building_code'] == bc and line['building_variant'] == '002':
-            df_tab_years.loc[idx, nb_col] = area * (1-nb_amb)
-        elif line['building_code'] == bc and line['building_variant'] == '003':
-            df_tab_years.loc[idx, nb_col] = area * nb_amb
-        return df_tab_years
-    for idx in range(len(df_tab_years)):
-        line = df_tab_years.iloc[idx]
-        df_tab_years.loc[idx, nb_col] = 0
-        df_tab_years = set_values(
-            line, 'EFH_L', nb_sfh_area, nb_amb, df_tab_years, idx)
-        df_tab_years = set_values(
-            line, 'MFH_L', nb_th_area, nb_amb, df_tab_years, idx)
-        df_tab_years = set_values(
-            line, 'RH_L', nb_mfh_area, nb_amb, df_tab_years, idx)
+    df_tab_years.loc[:, nb_col] = 0
+    bcs = ['EFH_L', 'MFH_L', 'RH_L']
+    areas = [nb_sfh_area, nb_mfh_area, nb_th_area]
+    for bc, area in zip(bcs, areas):
+        bc_map = df_tab_years['building_code'] == bc
+        nb_L_map_002 = bc_map & (df_tab_years['building_variant'] == '002')
+        df_tab_years[nb_col].loc[nb_L_map_002] = area * (1-nb_amb)
+
+        nb_L_map_003 = bc_map & (df_tab_years['building_variant'] == '003')
+        df_tab_years[nb_col].loc[nb_L_map_003] = area * nb_amb
     df_tab_years.loc[:, new_ls] = df_tab_years[calc_ls] + df_tab_years[nb_col]
     return df_tab_years
 
@@ -359,17 +353,17 @@ def heating_demand(df_tab_years, df_heat_demand, space_heat_need,
     high_sh_need = get_sh_need(high_map)
     middle_sh_need = get_sh_need(middle_map)
     low_sh_need = get_sh_need(low_map)
-    df_tab_years.loc[:, space_heat_need] = \
-        df_tab_years['space_heat_need'] * df_tab_years[new_ls]
-    df_tab_years.loc[:, hot_water_need] = \
-        df_tab_years['hot_water_need'] * df_tab_years[new_ls]
+    df_tab_years.loc[:, space_heat_need] = df_tab_years['space_heat_need'] * \
+        df_tab_years[new_ls]
+    df_tab_years.loc[:, hot_water_need] = df_tab_years['hot_water_need'] * \
+        df_tab_years[new_ls]
 
     # total sum
     df_heat_demand.loc[current_year, 'total_sh_need'] = sum(
         df_tab_years[space_heat_need])
     df_heat_demand.loc[current_year, 'total_hot_water_need'] = sum(
         df_tab_years[hot_water_need])
-    df_heat_demand.loc[current_year, 'total_heat_need'] =  \
+    df_heat_demand.loc[current_year, 'total_heat_need'] = \
         df_heat_demand.loc[current_year, 'total_sh_need'] + \
         df_heat_demand.loc[current_year, 'total_hot_water_need']
     # sum (>=120)
@@ -388,7 +382,7 @@ def heating_demand(df_tab_years, df_heat_demand, space_heat_need,
                 spec_map = (df_tab_years['building_code'] == bc) & \
                     (df_tab_years['building_variant'] == bv)
                 spec_sh_need = get_sh_need(spec_map).to_numpy()
-                if spec_sh_need:
+                if spec_sh_need.size > 0:
                     df_heat_demand.loc[current_year,
                                        f'{bc}_{bv}_sh_need'] = spec_sh_need
                     spec_sh_need_all.append(spec_sh_need)
@@ -463,10 +457,7 @@ def housing_model(df_tabula, df_share_buildings, dist_buildings, params,
     df_tab_years = df_tabula.merge(df_share_buildings,
                                    left_on='identifier',
                                    right_on='tabula_code')
-    # only use the columns we need
-    #  df_tb_keys = ['building_type', 'building_code', 'building_variant',
-    #              'living_space_2019']
-    #  df_tab_years = df_tab_years[df_tb_keys]
+
     bv_r_d = '001'  # building_variant_restauration and demolition
     # TODO: add in test: check for doublettes in tabula_code
 
@@ -474,20 +465,18 @@ def housing_model(df_tabula, df_share_buildings, dist_buildings, params,
     # DELETE ME FOR DEBUGGING PURPOSES --------------------
     #  df_heat_demand = pd.read_excel(os.path.join(
     #     'output', 'heat_demand_dev.xlsx'))
-    #plot_heat_demand(df_heat_demand, params['years'])
+    # plot_heat_demand(df_heat_demand, params['years'])
     # exit(1)
     # ---------------------
     # start with 2020 until 2060
     for i in range(len(params['years'])):
         # TODO: save all unneeded rows to extra table
-        # TODO: define all new columns here and only here!
         current_year = params['years'][i]
-        calc_ls = 'calc_living_space_{}'.format(current_year)
-        new_ls = 'living_space_{}'.format(current_year)
-        nb_col = 'new_building_area_{}'.format(current_year)
-
-        space_heat_need = 'space_heat_need_{}'.format(current_year)
-        hot_water_need = 'hot_water_need_{}'.format(current_year)
+        calc_ls = f'calc_living_space_{current_year}'
+        new_ls = f'living_space_{current_year}'
+        nb_col = f'new_building_area_{current_year}'
+        space_heat_need = f'space_heat_need_{current_year}'
+        hot_water_need = f'hot_water_need_{current_year}'
 
         df_tab_years = restauration(params, i, hyperparameter,
                                     dist_buildings, bv_r_d, current_year,
@@ -495,17 +484,16 @@ def housing_model(df_tabula, df_share_buildings, dist_buildings, params,
         df_tab_years = demolition(params, i, hyperparameter,
                                   dist_buildings, bv_r_d,
                                   current_year, df_tab_years, calc_ls)
-        df_tab_years = new_buildings(params, i, hyperparameter,
-                                     dist_buildings, bv_r_d,
-                                     df_tab_years,
-                                     calc_ls, new_ls, nb_col)
-        print('processed year {}'.format(current_year))
+        df_tab_years = new_buildings(params, i, df_tab_years, calc_ls,
+                                     new_ls, nb_col)
 
         df_tab_years, df_heat_demand = heating_demand(df_tab_years,
                                                       df_heat_demand,
                                                       space_heat_need,
                                                       hot_water_need,
                                                       new_ls, current_year)
+        print(f'processed year {current_year}')
+
     df_heat_demand.to_excel(os.path.join('output', 'heat_demand_dev.xlsx'))
     plot_heat_demand(df_heat_demand, params['years'])
     # TODO: check if spec_rest_area < wohnfläche - dann so wie bisher
