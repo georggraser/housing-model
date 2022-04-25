@@ -471,7 +471,7 @@ def plot_heat_demand(df_heat_demand, years, save_path, current_scen):
     ax1.set_ylim(0, limit_ax1)
     ax1.plot(years, total_sh_need, color=color)
     ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
-    limit_ax2 = spec_sh_need[0] / total_sh_need[0] * limit_ax1
+    limit_ax2 = (spec_sh_need[0] / total_sh_need[0]) * limit_ax1
 
     color = 'tab:blue'
     ax2.tick_params(axis='y', labelcolor=color)
@@ -533,7 +533,7 @@ def plot_heat_demand(df_heat_demand, years, save_path, current_scen):
     # (eventuell Bestandsgebäude unterteilt in Buildingvariants)
 
 
-def plot_scenarios(scen_paths, chosen_scenarios, output_folder):
+def plot_scenarios(scen_paths, chosen_scenarios, output_folder, bev):
     def set_title(title):
         scens = ''
         for idx, chos_scen in enumerate(chosen_scenarios):
@@ -543,13 +543,16 @@ def plot_scenarios(scen_paths, chosen_scenarios, output_folder):
                 scens = scens + ' vs. ' + chos_scen
         return f'{scens}: {title}'
 
+    def save_to(title):
+        return os.path.join(output_folder, title+'.png')
+
     # plot total living space
     heat_demands = [pd.read_excel(path) for path in scen_paths]
     fig, ax1 = plt.subplots()
     title = set_title('Comparison of total living space')
     ax1.set_title(title)
     ax1.set_xlabel('years')
-    ax1.set_ylabel('total living space')
+    ax1.set_ylabel('total living space in million square meters')
     colors = ['red', 'orange', 'green', 'purple', 'blue', 'pink']
     max_ls = []
     line_types = ['-', '--', '-.', ':']
@@ -562,10 +565,91 @@ def plot_scenarios(scen_paths, chosen_scenarios, output_folder):
             linestyle=line_types[idx % len(line_types)])
         max_ls.append(max(list(ls)[0], list(ls)[-1]))
 
-    offset = 1000
+    offset = max(max_ls) / 10
     ax1.set_ylim(0, max(max_ls) + offset)
     ax1.legend()
-    plt.savefig(os.path.join(output_folder, title+'.png'))
+    plt.savefig(save_to(title))
+    plt.show()
+
+    fig, ax1 = plt.subplots()
+    title = set_title('Comparison of per capita living space')
+    ax1.set_title(title)
+    ax1.set_xlabel('years')
+    ax1.set_ylabel('per capita living space in million square meters')
+    max_ls = []
+    line_types = ['-', '--', '-.', ':']
+    for idx, df_heat_demand in enumerate(heat_demands):
+        # TODO: either load years as index or do sth. about it
+        years = df_heat_demand['Unnamed: 0']
+        ls = df_heat_demand['total_ls'] / bev
+        ax1.plot(years, ls, color=colors[idx % len(
+            colors)], label=chosen_scenarios[idx], linewidth=2,
+            linestyle=line_types[idx % len(line_types)])
+        max_ls.append(max(list(ls)[0], list(ls)[-1]))
+
+    offset = max(max_ls) / 10
+    ax1.set_ylim(0, max(max_ls) + offset)
+    ax1.legend()
+    plt.savefig(save_to(title))
+    plt.show()
+
+    # comparison plot of average space heat scenario-wise
+    fig, ax1 = plt.subplots()
+    title = set_title('Total heat demand comparison')
+    plt.title(title)
+
+    colors_total = ['lightcoral', 'red',
+                    'orange', 'gold', 'khaki', 'peru']
+    # value of 2019 - the same for all
+    offset = 20000
+    limit_ax1 = heat_demands[0]['total_sh_need'][0] + offset
+    ax1.set_xlabel('years')
+    ax1.set_ylabel('total heat need in TWh', color=colors_total[0])
+    ax1.set_ylim(0, limit_ax1)
+    ax1.tick_params(axis='y', labelcolor='tab:red')
+
+    for idx, df_heat_demand in enumerate(heat_demands):
+        total_sh_need = list(df_heat_demand['total_sh_need'])
+
+        ax1.plot(years, total_sh_need,
+                 color=colors_total[idx % len(heat_demands)],
+                 label=chosen_scenarios[idx]+' total')
+        ax1.legend(loc='lower left', title='Total heat need')
+
+    plt.savefig(save_to(title))
+    # plt.show()
+
+    title = set_title('Total vs. Specific heat demand comparison')
+    plt.title(title)
+
+    colors_specific = ['teal', 'aqua', 'deepskyblue',
+                       'steelblue', 'navy', 'blue']
+
+    def plot_specific(ax2):
+        limit_ax2 = (heat_demands[0]['spec_sh_need'][0] /
+                     heat_demands[0]['total_sh_need'][0]) * limit_ax1
+        ax2.tick_params(axis='y', labelcolor='tab:blue')
+        ax2.set_ylim(0, limit_ax2)
+        ax2.set_ylabel('specific heat need in kWh/m2',
+                       color=colors_specific[0])
+        for idx, df_heat_demand in enumerate(heat_demands):
+            spec_sh_need = list(df_heat_demand['spec_sh_need'])
+
+            ax2.plot(years, spec_sh_need,
+                     color=colors_specific[idx % len(heat_demands)],
+                     label=chosen_scenarios[idx]+' specific')
+            ax2.legend(loc='upper right', title='Specific heat need')
+
+    ax2 = ax1.twinx()  # instantiate a second axes that shares the x-axis
+    plot_specific(ax2)
+    plt.savefig(save_to(title))
+    plt.show()
+
+    fig, ax1 = plt.subplots()
+    title = set_title('Specific heat demand comparison')
+    plt.title(title)
+    plot_specific(ax1)
+    plt.savefig(save_to(title))
     plt.show()
 
 
@@ -650,7 +734,7 @@ def housing_model(df_tabula, df_share_buildings, dist_buildings, params,
     # a) wir lassens (nicht sanieren)
     # b) das sanierte (in building_variant 002)  wird nochmal saniert
     # (bv 003)
-    return df_tab_years
+    # return df_tab_years
 
 
 def main():
@@ -672,24 +756,27 @@ def main():
     else:
         chosen_scenarios = hyperparameter['scenario']
     # iterate through given scenarios and process them successively
+    chosen_scenarios.sort()
+    bev_var = hyperparameter['bev_variant']
+    bev = dem_dev[bev_var]
+    bev_all = bev.copy()
+    bev = bev[1:]  # exclude 2019
 
-    if False:
+    if True:
         for scen in chosen_scenarios:
             # calculate rates
             rc = inputs.RateCalculator()
-            bev_var = hyperparameter['bev_variant']
-            bev = dem_dev[bev_var]
             params = rc.rates(total_living_space_2019, bev, scen_params[scen])
-            df_tab_years = housing_model(df_tabula, df_share_buildings,
-                                         dist_buildings, params,
-                                         hyperparameter, scen)
+            housing_model(df_tabula, df_share_buildings,
+                          dist_buildings, params,
+                          hyperparameter, scen)
     if len(chosen_scenarios) > 1:
         scen_paths = [os.path.join(hyperparameter['output_folder'],
                                    scen,
                                    'heat_demand_dev.xlsx')
                       for scen in chosen_scenarios]
         plot_scenarios(scen_paths, chosen_scenarios,
-                       hyperparameter['output_folder'])
+                       hyperparameter['output_folder'], bev_all)
 
 
 if __name__ == '__main__':
