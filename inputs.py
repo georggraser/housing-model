@@ -33,7 +33,7 @@ class DataLoader():
         # somewhere and being called from there
 
         # parameters for calling the demographic developement
-        columns = 'A, D:AR'
+        columns = 'A, C:AR'
         rows_start = 5
         rows_end = 35
         df = pd.read_excel(
