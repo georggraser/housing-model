@@ -9,6 +9,7 @@ import inputs
 import os
 import pandas as pd
 import matplotlib.pyplot as plt
+import numpy as np
 
 # GLOBALS
 
@@ -57,7 +58,6 @@ def calc_dist(df_tab_years, bc, bv_r_d, current_year, is_r, calc_ls):
     # in the different house classes (z.B. A: MFH-50%, EFH-20%, ...)
     # write total areas in dist ({A: ls_, B: ls_ ...})
     dist = {x: 0 for x in bc}
-    # TODO: eliminate need for df_unrest
     for x in range(len(df_tab_years)):
         line = df_tab_years.iloc[x]
         if line['building_variant'] == bv_r_d:
@@ -251,34 +251,6 @@ def apply_r_d(df_tab_years, r_d_col, r_deep_amb,
     return df_tab_years
 
 
-def apply_nb(df_tab_years, nb_area_i, i, params, current_year,
-             calc_ls, new_ls):
-    nb_sfh_area = params['new_building_share_sfh'][i] * nb_area_i
-    nb_th_area = params['new_building_share_th'][i] * nb_area_i
-    nb_mfh_area = params['new_building_share_mfh'][i] * nb_area_i
-    nb_amb = params['new_building_deep_amb'][i]
-    nb_col = 'new_building_area_{}'.format(current_year)
-
-    def set_values(line, bc, area, nb_amb, df_tab_years, idx):
-        if line['building_code'] == bc and line['building_variant'] == '002':
-            df_tab_years.loc[idx, nb_col] = area * (1-nb_amb)
-        elif line['building_code'] == bc and line['building_variant'] == '003':
-            df_tab_years.loc[idx, nb_col] = area * nb_amb
-        return df_tab_years
-    for idx in range(len(df_tab_years)):
-        line = df_tab_years.iloc[idx]
-        df_tab_years.loc[idx, nb_col] = 0
-        df_tab_years = set_values(
-            line, 'EFH_L', nb_sfh_area, nb_amb, df_tab_years, idx)
-        df_tab_years = set_values(
-            line, 'MFH_L', nb_th_area, nb_amb, df_tab_years, idx)
-        df_tab_years = set_values(
-            line, 'RH_L', nb_mfh_area, nb_amb, df_tab_years, idx)
-
-    df_tab_years.loc[:, new_ls] = df_tab_years[calc_ls] + df_tab_years[nb_col]
-    return df_tab_years
-
-
 def restauration(params, i, hyperparameter, dist_buildings, bv_r_d,
                  current_year, df_tab_years, calc_ls):
     # restoration calculation begins
@@ -325,7 +297,7 @@ def restauration(params, i, hyperparameter, dist_buildings, bv_r_d,
 
 
 def demolition(params, i, hyperparameter, dist_buildings, bv_r_d,
-               current_year, df_tab_years, calc_ls):
+               current_year, df_tab_years, calc_ls, d_col):
     # total ls from last year (initially 2019)
     d_area_i = params['demolition_rate'][i] \
         * params['total_living_space']['{}'.format(2019 + i)]
@@ -335,7 +307,7 @@ def demolition(params, i, hyperparameter, dist_buildings, bv_r_d,
                                 d_area_i, bv_r_d,
                                 current_year, calc_ls,
                                 is_r=False)
-    d_col = 'demolition_area_{}'.format(current_year)
+
     for (v, idx) in d_final.values():
         df_tab_years.loc[idx, d_col] = v
 
@@ -344,41 +316,62 @@ def demolition(params, i, hyperparameter, dist_buildings, bv_r_d,
     return df_tab_years
 
 
-def new_buildings(params, i, hyperparameter, dist_buildings, bv_r_d,
-                  current_year, df_tab_years, calc_ls, new_ls):
+def new_buildings(params, i, df_tab_years, calc_ls, new_ls, nb_col):
     # total ls from last year (initially 2019)
     nb_area_i = params['new_building_rate'][i] \
         * params['total_living_space']['{}'.format(2019 + i)]
-    df_tab_years = apply_nb(df_tab_years, nb_area_i, i,
-                            params, current_year, calc_ls, new_ls)
+    nb_sfh_area = params['new_building_share_sfh'][i] * nb_area_i
+    nb_th_area = params['new_building_share_th'][i] * nb_area_i
+    nb_mfh_area = params['new_building_share_mfh'][i] * nb_area_i
+    nb_amb = params['new_building_deep_amb'][i]
+
+    df_col = pd.DataFrame({nb_col: [0 for _ in range(len(df_tab_years))]})
+    bcs = ['EFH_L', 'MFH_L', 'RH_L']
+    areas = [nb_sfh_area, nb_mfh_area, nb_th_area]
+    for bc, area in zip(bcs, areas):
+        bc_map = df_tab_years['building_code'] == bc
+        bv_002 = df_tab_years['building_variant'] == '002'
+        bv_003 = df_tab_years['building_variant'] == '003'
+
+        nb_L_map_002 = bc_map & bv_002
+        df_col[nb_col].loc[nb_L_map_002] = area * (1-nb_amb)
+
+        nb_L_map_003 = bc_map & bv_003
+        df_col[nb_col].loc[nb_L_map_003] = area * nb_amb
+    df_tab_years.loc[:, nb_col] = df_col
+    df_tab_years.loc[:, new_ls] = df_tab_years[calc_ls] + df_tab_years[nb_col]
     return df_tab_years
 
 
 def heating_demand(df_tab_years, df_heat_demand, space_heat_need,
-                   hot_water_need, new_ls, current_year):
-    high_sh_need = []
-    middle_sh_need = []
-    low_sh_need = []
-    for idx in range(len(df_tab_years)):
-        line = df_tab_years.iloc[idx]
-        spec_sh_need = line['space_heat_need']
-        hot_water = line['hot_water_need']
-        ls = line[new_ls]
-        sh_need = spec_sh_need * ls
-        df_tab_years.loc[idx, space_heat_need] = sh_need
-        df_tab_years.loc[idx, hot_water_need] = hot_water * ls
-        if spec_sh_need >= 120:
-            high_sh_need.append(sh_need)
-        elif spec_sh_need < 120 and spec_sh_need >= 90:
-            middle_sh_need.append(sh_need)
-        elif spec_sh_need < 90:
-            low_sh_need.append(sh_need)
+                   hot_water_need, new_ls, current_year, d_col):
+    high_map = df_tab_years['space_heat_need'] >= 120
+    middle_map = (df_tab_years['space_heat_need'] >= 90) &\
+        (df_tab_years['space_heat_need'] < 120)
+    low_map = df_tab_years['space_heat_need'] < 90
+
+    def get_sh_need(map):
+        return df_tab_years['space_heat_need'].loc[map] *\
+            df_tab_years[new_ls].loc[map]
+    high_sh_need = get_sh_need(high_map)
+    middle_sh_need = get_sh_need(middle_map)
+    low_sh_need = get_sh_need(low_map)
+    df_tab_years.loc[:, space_heat_need] = df_tab_years['space_heat_need'] *\
+        df_tab_years[new_ls]
+    df_tab_years.loc[:, hot_water_need] = df_tab_years['hot_water_need'] *\
+        df_tab_years[new_ls]
+
     # total sum
+    df_heat_demand.loc[current_year, 'total_ls'] = sum(
+        df_tab_years[new_ls])
     df_heat_demand.loc[current_year, 'total_sh_need'] = sum(
         df_tab_years[space_heat_need])
+    df_heat_demand.loc[current_year, 'spec_sh_need'] = \
+        df_heat_demand.loc[current_year, 'total_sh_need'] / \
+        df_heat_demand.loc[current_year, 'total_ls']
     df_heat_demand.loc[current_year, 'total_hot_water_need'] = sum(
         df_tab_years[hot_water_need])
-    df_heat_demand.loc[current_year, 'total_heat_need'] =  \
+    df_heat_demand.loc[current_year, 'total_heat_need'] = \
         df_heat_demand.loc[current_year, 'total_sh_need'] + \
         df_heat_demand.loc[current_year, 'total_hot_water_need']
     # sum (>=120)
@@ -388,17 +381,44 @@ def heating_demand(df_tab_years, df_heat_demand, space_heat_need,
     # sum (<90)
     df_heat_demand.loc[current_year, 'low_sh_need'] = sum(low_sh_need)
 
+    # new buildings sh need
+    all_inserts_rows = []
+    all_inserts_cols = []
+    for ch in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L']:
+        building_list = [f'EFH_{ch}', f'MFH_{ch}', f'RH_{ch}', f'GMH_{ch}']
+        for bc in building_list:
+            spec_sh_need_all = []
+            for bv in ['001', '002', '003']:
+                spec_map = (df_tab_years['building_code'] == bc) & \
+                    (df_tab_years['building_variant'] == bv)
+                spec_sh_need = get_sh_need(spec_map).to_numpy()
+                if len(spec_sh_need) == 0:
+                    spec_sh_need = np.zeros(1)
+                all_inserts_cols.append(f'{bc}_{bv}_sh_need')
+                all_inserts_rows.append(spec_sh_need)
+                spec_sh_need_all.append(sum(spec_sh_need))
+            all_inserts_cols.append(f'{bc}_sh_need')
+            all_inserts_rows.append(sum(spec_sh_need_all))
+    df_heat_demand.loc[current_year, all_inserts_cols] = all_inserts_rows
+
+    offset = 0
+    if current_year > 2019:
+        offset = df_heat_demand.loc[current_year-1, 'dem_sh_need_decrease']
+        df_heat_demand.loc[current_year, 'dem_sh_need_decrease'] = \
+            sum(df_tab_years['space_heat_need'].mul(
+                df_tab_years[d_col], fill_value=0)) + offset
+    else:
+        df_heat_demand.loc[current_year, 'dem_sh_need_decrease'] = 0
     return df_tab_years, df_heat_demand
 
 
-def plot_heat_demand(df_heat_demand, years):
-    total_sh_need = df_heat_demand['total_sh_need']
-    total_hot_water_need = df_heat_demand['total_hot_water_need']
-    total_heat_need = df_heat_demand['total_heat_need']
+def plot_heat_demand(df_heat_demand, years, save_path, current_scen):
+    def set_title(title):
+        return f'{current_scen}: {title}'
     high_sh_need = df_heat_demand['high_sh_need']
     middle_sh_need = df_heat_demand['middle_sh_need']
     low_sh_need = df_heat_demand['low_sh_need']
-
+    plt.figure(1)
     # Plot x-labels, y-label and data
     plt.plot([], [], color='blue', label='low_sh_need')
     plt.plot([], [], color='orange', label='middle_sh_need')
@@ -407,71 +427,305 @@ def plot_heat_demand(df_heat_demand, years):
     plt.stackplot(years, low_sh_need, middle_sh_need, high_sh_need,
                   baseline='zero', colors=['blue', 'orange', 'brown'])
     plt.legend()
-    plt.title('Heat demand comparison')
+    title = set_title('Heat demand comparison')
+    plt.title(title)
     plt.xlabel('years')
     plt.ylabel('space heat need in kwh')
-    plt.show()
+    plt.savefig(os.path.join(save_path, title))
+    # plt.show()
+
+    # Raumwärme und Warmwasser bedarf
+    # total_sh_need = df_heat_demand['total_sh_need']
+    total_hot_water_need = df_heat_demand['total_hot_water_need']
+    total_heat_need = df_heat_demand['total_heat_need']
+
+    plt.figure(2)
+    # Plot x-labels, y-label and data
+    # plt.plot([], [], color='blue', label='total_sh_need')
+    plt.plot([], [], color='orange', label='total_hot_water_need')
+    plt.plot([], [], color='brown', label='total_heat_need')
+
+    plt.stackplot(years, total_hot_water_need, total_heat_need,
+                  baseline='zero', colors=['orange', 'brown'])
+    plt.legend()
+    title = set_title('Space heat demand comparison')
+    plt.title(title)
+    plt.xlabel('years')
+    plt.ylabel('space heat need in kwh')
+    plt.savefig(os.path.join(save_path, title))
+    # plt.show()
+
+    # Raumwärmebedarf und spezifischer Wärmebedarf
+    total_sh_need = list(df_heat_demand['total_sh_need'])
+    spec_sh_need = list(df_heat_demand['spec_sh_need'])
+
+    fig, ax1 = plt.subplots()
+    title = set_title('Total heat demand comparison')
+    plt.title(title)
+
+    color = 'tab:red'
+    ax1.set_xlabel('years')
+    ax1.set_ylabel('total heat need in TWh', color=color)
+    offset = 20000
+    limit_ax1 = total_sh_need[0] + offset
+    ax1.set_ylim(0, limit_ax1)
+    ax1.plot(years, total_sh_need, color=color)
+    ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
+    limit_ax2 = (spec_sh_need[0] / total_sh_need[0]) * limit_ax1
+
+    color = 'tab:blue'
+    ax2.tick_params(axis='y', labelcolor=color)
+    ax2.set_ylim(0, limit_ax2)
+    ax2.plot(years, spec_sh_need, color=color)
+    ax2.set_ylabel('specific heat need in kWh/m2', color=color)
+    fig.tight_layout()
+    plt.legend()
+    plt.savefig(os.path.join(save_path, title))
+    # plt.show()
+
+    #   Wärmebedarf
+    plt.figure(3)
+    title = set_title('Heat need of building+aging classes')
+    plt.title(title)
+    plt.xlabel('years')
+    plt.plot([], [], color='red', label='A-J: 001')
+    plt.plot([], [], color='orange', label='A-J: 002')
+    plt.plot([], [], color='green', label='A-J: 003')
+    plt.plot([], [], color='purple', label='L+K: 001')
+    plt.plot([], [], color='blue', label='L+K: 002')
+    plt.plot([], [], color='pink', label='L+K: 003')
+    plt.plot([], [], color='gray', label='demolition')
+    to_stack = []
+    # for ch in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L']:
+    for var_idx in ['001', '002', '003']:
+        tmp_to_stack = []
+        for ch in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']:
+            tmp_to_stack.append(df_heat_demand[f'EFH_{ch}_{var_idx}_sh_need'] +
+                                df_heat_demand[f'MFH_{ch}_{var_idx}_sh_need'] +
+                                df_heat_demand[f'RH_{ch}_{var_idx}_sh_need'] +
+                                df_heat_demand[f'GMH_{ch}_{var_idx}_sh_need'])
+        to_stack.append(sum(tmp_to_stack))
+    for var_idx in ['001', '002', '003']:
+        tmp_to_stack = []
+        for ch in ['K', 'L']:
+            tmp_to_stack.append(df_heat_demand[f'EFH_{ch}_{var_idx}_sh_need'] +
+                                df_heat_demand[f'MFH_{ch}_{var_idx}_sh_need'] +
+                                df_heat_demand[f'RH_{ch}_{var_idx}_sh_need'] +
+                                df_heat_demand[f'GMH_{ch}_{var_idx}_sh_need'])
+        to_stack.append(sum(tmp_to_stack))
+
+    # to_stack.append(-df_heat_demand['dem_sh_need_decrease'])
+    plt.stackplot(years, to_stack, baseline='zero',
+                  colors=['red', 'orange', 'green', 'purple', 'blue', 'pink'])
+    plt.stackplot(years, df_heat_demand['dem_sh_need_decrease'],
+                  baseline='zero', colors=['gray'], hatch='x', alpha=0.8)
+
+    # plt.legend()
+    plt.savefig(os.path.join(save_path, title))
+    # plt.show()
+
+    # Plot 2: Wärmebedarf nach EFH, RH, MFH und Ab
+
+    # Plot 3: Quadratmeter der unterschiedlichen Gebäude /
+    # (müssen wir überlegen wonach wir unterteilen: EFH, RH, MFH und AB?)
+
+    # Plot 4: Plotten wie viel Neubau, Abgang und Bestandsgebäude /
+    # (eventuell Bestandsgebäude unterteilt in Buildingvariants)
+
+
+def plot_scenarios(scen_paths, chosen_scenarios, output_folder, bev):
+    def set_title(title):
+        scens = ''
+        for idx, chos_scen in enumerate(chosen_scenarios):
+            if idx == 0:
+                scens = chos_scen
+            else:
+                scens = scens + ' vs. ' + chos_scen
+        return f'{scens}: {title}'
+
+    def save_to(title):
+        return os.path.join(output_folder, title+'.png')
+
+    # plot total living space
+    heat_demands = [pd.read_excel(path) for path in scen_paths]
+    fig, ax1 = plt.subplots()
+    title = set_title('Comparison of total living space')
+    ax1.set_title(title)
+    ax1.set_xlabel('years')
+    ax1.set_ylabel('total living space in million square meters')
+    colors = ['red', 'orange', 'green', 'purple', 'blue', 'pink']
+    max_ls = []
+    line_types = ['-', '--', '-.', ':']
+    for idx, df_heat_demand in enumerate(heat_demands):
+        # TODO: either load years as index or do sth. about it
+        years = df_heat_demand['Unnamed: 0']
+        ls = df_heat_demand['total_ls']
+        ax1.plot(years, ls, color=colors[idx % len(
+            colors)], label=chosen_scenarios[idx], linewidth=2,
+            linestyle=line_types[idx % len(line_types)])
+        max_ls.append(max(list(ls)[0], list(ls)[-1]))
+
+    offset = max(max_ls) / 10
+    ax1.set_ylim(0, max(max_ls) + offset)
+    ax1.legend()
+    plt.savefig(save_to(title))
+    # plt.show()
+
+    fig, ax1 = plt.subplots()
+    title = set_title('Comparison of per capita living space')
+    ax1.set_title(title)
+    ax1.set_xlabel('years')
+    ax1.set_ylabel('per capita living space in million square meters')
+    max_ls = []
+    line_types = ['-', '--', '-.', ':']
+    for idx, df_heat_demand in enumerate(heat_demands):
+        # TODO: either load years as index or do sth. about it
+        years = df_heat_demand['Unnamed: 0']
+        ls = df_heat_demand['total_ls'] / bev
+        ax1.plot(years, ls, color=colors[idx % len(
+            colors)], label=chosen_scenarios[idx], linewidth=2,
+            linestyle=line_types[idx % len(line_types)])
+        max_ls.append(max(list(ls)[0], list(ls)[-1]))
+
+    offset = max(max_ls) / 10
+    ax1.set_ylim(0, max(max_ls) + offset)
+    ax1.legend()
+    plt.savefig(save_to(title))
+    # plt.show()
+
+    # comparison plot of average space heat scenario-wise
+    fig, ax1 = plt.subplots()
+    title = set_title('Total heat demand comparison')
+    plt.title(title)
+
+    colors_total = ['lightcoral', 'red',
+                    'orange', 'gold', 'khaki', 'peru']
+    # value of 2019 - the same for all
+    offset = 20000
+    limit_ax1 = heat_demands[0]['total_sh_need'][0] + offset
+    ax1.set_xlabel('years')
+    ax1.set_ylabel('total heat need in TWh', color=colors_total[0])
+    ax1.set_ylim(0, limit_ax1)
+    ax1.tick_params(axis='y', labelcolor='tab:red')
+
+    for idx, df_heat_demand in enumerate(heat_demands):
+        total_sh_need = list(df_heat_demand['total_sh_need'])
+
+        ax1.plot(years, total_sh_need,
+                 color=colors_total[idx % len(heat_demands)],
+                 label=chosen_scenarios[idx]+' total')
+        ax1.legend(loc='lower left', title='Total heat need')
+
+    plt.savefig(save_to(title))
+    # plt.show()
+
+    title = set_title('Total vs. Specific heat demand comparison')
+    plt.title(title)
+
+    colors_specific = ['teal', 'aqua', 'deepskyblue',
+                       'steelblue', 'navy', 'blue']
+
+    def plot_specific(ax2):
+        limit_ax2 = (heat_demands[0]['spec_sh_need'][0] /
+                     heat_demands[0]['total_sh_need'][0]) * limit_ax1
+        ax2.tick_params(axis='y', labelcolor='tab:blue')
+        ax2.set_ylim(0, limit_ax2)
+        ax2.set_ylabel('specific heat need in kWh/m2',
+                       color=colors_specific[0])
+        for idx, df_heat_demand in enumerate(heat_demands):
+            spec_sh_need = list(df_heat_demand['spec_sh_need'])
+
+            ax2.plot(years, spec_sh_need,
+                     color=colors_specific[idx % len(heat_demands)],
+                     label=chosen_scenarios[idx]+' specific')
+            ax2.legend(loc='upper right', title='Specific heat need')
+
+    ax2 = ax1.twinx()  # instantiate a second axes that shares the x-axis
+    plot_specific(ax2)
+    plt.savefig(save_to(title))
+    # plt.show()
+
+    fig, ax1 = plt.subplots()
+    title = set_title('Specific heat demand comparison')
+    plt.title(title)
+    plot_specific(ax1)
+    plt.savefig(save_to(title))
+    # plt.show()
 
 
 def housing_model(df_tabula, df_share_buildings, dist_buildings, params,
-                  hyperparameter):
+                  hyperparameter, current_scen):
     # take share buildings and connect the data with df_tabula
     # only merge where living space != nan in df_share_buildings
-
+    save_path = os.path.join(hyperparameter['output_folder'], current_scen)
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
     df_share_buildings = df_share_buildings.loc[
         df_share_buildings['living_space_2019'] > 0]
     df_tab_years = df_tabula.merge(df_share_buildings,
                                    left_on='identifier',
                                    right_on='tabula_code')
-    # only use the columns we need
-    #  df_tb_keys = ['building_type', 'building_code', 'building_variant',
-    #              'living_space_2019']
-    #  df_tab_years = df_tab_years[df_tb_keys]
+    years = params['years'].copy()
+    years.insert(0, 2019)
     bv_r_d = '001'  # building_variant_restauration and demolition
     # TODO: add in test: check for doublettes in tabula_code
-    df_heat_demand = pd.DataFrame(data={'total_sh_need': -1,
-                                        'total_hot_water_need': -1,
-                                        'total_heat_need': -1,
-                                        'high_sh_need': -1,
-                                        'middle_sh_need': -1,
-                                        'low_sh_need': -1},
-                                  index=params['years'])
+
+    df_heat_demand = pd.DataFrame(data={}, index=years)
     # DELETE ME FOR DEBUGGING PURPOSES --------------------
-    df_heat_demand = pd.read_excel(os.path.join(
-        'output', 'heat_demand_dev.xlsx'))
-    plot_heat_demand(df_heat_demand, params['years'])
-    exit(1)
-    # --------------------
+    del_me = False
+    if del_me:
+        df_heat_demand = pd.read_excel(os.path.join(
+            save_path, 'heat_demand_dev.xlsx'))
+        plot_heat_demand(df_heat_demand, years)
+        exit(1)
+    # ---------------------
     # start with 2020 until 2060
+    # all_ls = []
     for i in range(len(params['years'])):
         # TODO: save all unneeded rows to extra table
-        # TODO: define all new columns here and only here!
         current_year = params['years'][i]
-        calc_ls = 'calc_living_space_{}'.format(current_year)
-        new_ls = 'living_space_{}'.format(current_year)
-        space_heat_need = 'space_heat_need_{}'.format(current_year)
-        hot_water_need = 'hot_water_need_{}'.format(current_year)
+        calc_ls = f'calc_living_space_{current_year}'
+        new_ls = f'living_space_{current_year}'
+        d_col = 'demolition_area_{}'.format(current_year)
+        nb_col = f'new_building_area_{current_year}'
+        space_heat_need = f'space_heat_need_{current_year}'
+        hot_water_need = f'hot_water_need_{current_year}'
+        # all_ls.append(new_ls)
 
         df_tab_years = restauration(params, i, hyperparameter,
                                     dist_buildings, bv_r_d, current_year,
                                     df_tab_years, calc_ls)
         df_tab_years = demolition(params, i, hyperparameter,
                                   dist_buildings, bv_r_d,
-                                  current_year, df_tab_years, calc_ls)
-        df_tab_years = new_buildings(params, i, hyperparameter,
-                                     dist_buildings, bv_r_d,
-                                     current_year, df_tab_years,
-                                     calc_ls, new_ls)
-        print('processed year {}'.format(current_year))
+                                  current_year, df_tab_years, calc_ls, d_col)
+        df_tab_years = new_buildings(params, i, df_tab_years, calc_ls,
+                                     new_ls, nb_col)
 
+        # create entries for 2019
+        if i == 0:
+            sh_need_2019 = 'space_heat_need_2019'
+            hw_need_2019 = 'hot_water_need_2019'
+            ls_2019 = 'living_space_2019'
+            df_tab_years, df_heat_demand = heating_demand(df_tab_years,
+                                                          df_heat_demand,
+                                                          sh_need_2019,
+                                                          hw_need_2019,
+                                                          ls_2019,
+                                                          current_year-1,
+                                                          d_col)
         df_tab_years, df_heat_demand = heating_demand(df_tab_years,
                                                       df_heat_demand,
                                                       space_heat_need,
                                                       hot_water_need,
-                                                      new_ls, current_year)
-    df_heat_demand.to_excel(os.path.join(
-        'output', 'heat_demand_dev.xlsx'))
-    plot_heat_demand(df_heat_demand, params['years'])
+                                                      new_ls, current_year,
+                                                      d_col)
+        print(f'processed year {current_year}')
+    df_tab_years.to_excel(os.path.join(save_path, 'building_stock_dev.xlsx'))
+    df_heat_demand.to_excel(os.path.join(save_path, 'heat_demand_dev.xlsx'))
+    # cols = ['space_heat_need'] + all_ls
+    # df_tab = df_tab_years[cols]
+    # df_tabf.to_excel(os.path.join(save_path, 'luisa_check.xlsx'))
+    plot_heat_demand(df_heat_demand, years, save_path, current_scen)
     # TODO: check if spec_rest_area < wohnfläche - dann so wie bisher
     # else: wenn eine oder nicht alle > wohnfläche: dann umverteilen auf
     # die anderen der unsanierten Gebäude (Gebäudeklassenübergreifend)
@@ -480,9 +734,7 @@ def housing_model(df_tabula, df_share_buildings, dist_buildings, params,
     # a) wir lassens (nicht sanieren)
     # b) das sanierte (in building_variant 002)  wird nochmal saniert
     # (bv 003)
-    #  df_tab_years.to_excel(os.path.join(
-    #    'output', 'building_stock_dev.xlsx'))
-    return df_tab_years
+    # return df_tab_years
 
 
 def main():
@@ -504,14 +756,26 @@ def main():
     else:
         chosen_scenarios = hyperparameter['scenario']
     # iterate through given scenarios and process them successively
+    chosen_scenarios.sort()
+    bev_var = hyperparameter['bev_variant']
+    bev = dem_dev[bev_var]
+    bev_all = bev.copy()
+    bev = bev[1:]  # exclude 2019
+
     for scen in chosen_scenarios:
         # calculate rates
         rc = inputs.RateCalculator()
-        bev_var = hyperparameter['bev_variant']
-        bev = dem_dev[bev_var]
         params = rc.rates(total_living_space_2019, bev, scen_params[scen])
-        df_tab_years = housing_model(df_tabula, df_share_buildings,
-                                     dist_buildings, params, hyperparameter)
+        housing_model(df_tabula, df_share_buildings,
+                      dist_buildings, params,
+                      hyperparameter, scen)
+    if len(chosen_scenarios) > 1:
+        scen_paths = [os.path.join(hyperparameter['output_folder'],
+                                   scen,
+                                   'heat_demand_dev.xlsx')
+                      for scen in chosen_scenarios]
+        plot_scenarios(scen_paths, chosen_scenarios,
+                       hyperparameter['output_folder'], bev_all)
 
 
 if __name__ == '__main__':
